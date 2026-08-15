@@ -1,0 +1,614 @@
+#!/bin/sh
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DEFAULT_LINES=12
+LINES=$DEFAULT_LINES
+
+usage() {
+    echo "usage: wuw [-n lines] SERVICE" >&2
+    exit 2
+}
+
+setup_colors() {
+    case "${WUW_COLOR:-auto}" in
+        always) _color=1 ;;
+        never) _color=0 ;;
+        auto|*)
+            if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+                _color=1
+            else
+                _color=0
+            fi ;;
+    esac
+
+    if [ "$_color" -eq 1 ]; then
+        BOLD='\033[1m'
+        GREEN='\033[1;32m'
+        RED='\033[1;31m'
+        GREY='\033[1;90m'
+        RESET='\033[0m'
+    else
+        BOLD=''
+        GREEN=''
+        RED=''
+        GREY=''
+        RESET=''
+    fi
+}
+
+canonical_path() {
+    if command -v readlink >/dev/null 2>&1; then
+        readlink -f "$1" 2>/dev/null && return
+    fi
+
+    _d=$(dirname "$1" 2>/dev/null) || _d=.
+    _b=$(basename "$1" 2>/dev/null) || _b=$1
+
+    (cd -P "$_d" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$_b") || printf '%s\n' "$1"
+}
+
+human_age() {
+    _s=$1
+    [ -n "$_s" ] || {
+        printf 'unknown'
+        return
+    }
+
+    _d=$((_s / 86400))
+    _h=$(((_s % 86400) / 3600))
+    _m=$(((_s % 3600) / 60))
+    _sec=$((_s % 60))
+
+    if [ "$_d" -gt 1 ]; then printf '%d days ago' "$_d"
+    elif [ "$_d" -eq 1 ]; then printf '1 day ago'
+    elif [ "$_h" -gt 1 ]; then printf '%d hours ago' "$_h"
+    elif [ "$_h" -eq 1 ]; then printf '1 hour ago'
+    elif [ "$_m" -gt 1 ]; then printf '%d min ago' "$_m"
+    elif [ "$_m" -eq 1 ]; then printf '1 min ago'
+    else printf '%ds ago' "$_sec"
+    fi
+}
+
+human_cpu() {
+    _s=$1
+    [ -n "$_s" ] || _s=0
+
+    _d=$((_s / 86400))
+    _h=$(((_s % 86400) / 3600))
+    _m=$(((_s % 3600) / 60))
+    _sec=$((_s % 60))
+
+    if [ "$_d" -gt 0 ]; then printf '%dd %dh %dmin %ds' "$_d" "$_h" "$_m" "$_sec"
+    elif [ "$_h" -gt 0 ]; then printf '%dh %dmin %ds' "$_h" "$_m" "$_sec"
+    elif [ "$_m" -gt 0 ]; then printf '%dmin %ds' "$_m" "$_sec"
+    else printf '%ds' "$_sec"
+    fi
+}
+
+format_kb() {
+    _kb=$1
+    [ -n "$_kb" ] || _kb=0
+
+    if [ "$_kb" -ge 1048576 ]; then
+        awk -v k="$_kb" 'BEGIN { printf "%.1fG", k/1048576 }'
+    elif [ "$_kb" -ge 1024 ]; then
+        awk -v k="$_kb" 'BEGIN { printf "%.1fM", k/1024 }'
+    else
+        printf '%dK' "$_kb"
+    fi
+}
+
+desc_from_files() {
+    _svc=$1
+    _unit=$2
+
+    # runit: nasza lokalna konwencja kompatybilna nazwą z SysV/LSB
+    if [ -n "$_unit" ] && [ -d "$_unit" ] && [ -r "$_unit/run" ]; then
+        _x=$(sed -n 's/^# *Short-Description:[[:space:]]*//p' "$_unit/run" | sed -n '1p')
+        [ -n "$_x" ] && {
+            printf '%s\n' "$_x"
+            return
+        }
+
+        _x=$(sed -n 's/^# *Description:[[:space:]]*//p' "$_unit/run" | sed -n '1p')
+        [ -n "$_x" ] && {
+            printf '%s\n' "$_x"
+            return
+        }
+    fi
+
+    # SysV/LSB
+    if [ -r "/etc/init.d/$_svc" ]; then
+        _x=$(sed -n 's/^# *Short-Description:[[:space:]]*//p' "/etc/init.d/$_svc" | sed -n '1p')
+        [ -n "$_x" ] && {
+            printf '%s\n' "$_x"
+            return
+        }
+
+        _x=$(sed -n 's/^# *Description:[[:space:]]*//p' "/etc/init.d/$_svc" | sed -n '1p')
+        [ -n "$_x" ] && {
+            printf '%s\n' "$_x"
+            return
+        }
+    fi
+
+    # fallback, jeżeli pakiet zostawił unit systemd jako dokumentację
+    for _f in \
+        "/lib/systemd/system/$_svc.service" \
+        "/usr/lib/systemd/system/$_svc.service" \
+        "/etc/systemd/system/$_svc.service"
+    do
+        if [ -r "$_f" ]; then
+            _x=$(sed -n 's/^Description=//p' "$_f" | sed -n '1p')
+            [ -n "$_x" ] && {
+                printf '%s\n' "$_x"
+                return
+            }
+        fi
+    done
+
+    printf 'service\n'
+}
+
+descendant_pids() {
+    _root=$1
+
+    ps -eo pid=,ppid= 2>/dev/null | awk -v root="$_root" '
+        { pid[NR]=$1; ppid[NR]=$2 }
+        END {
+            alive[root]=1
+            changed=1
+
+            while (changed) {
+                changed=0
+                for (i=1; i<=NR; i++) {
+                    if (alive[ppid[i]] && !alive[pid[i]]) {
+                        alive[pid[i]]=1
+                        changed=1
+                    }
+                }
+            }
+
+            for (i=1; i<=NR; i++)
+                if (alive[pid[i]]) print pid[i]
+        }
+    '
+}
+
+sum_threads() {
+    _sum=0
+
+    for _p in $PIDS; do
+        _t=$(sed -n 's/^Threads:[[:space:]]*//p' "/proc/$_p/status" 2>/dev/null | sed -n '1p')
+        [ -n "$_t" ] || _t=1
+        _sum=$((_sum + _t))
+    done
+
+    printf '%s' "$_sum"
+}
+
+sum_rss_kb() {
+    _sum=0
+
+    for _p in $PIDS; do
+        _r=$(sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "/proc/$_p/status" 2>/dev/null | sed -n '1p')
+        [ -n "$_r" ] || _r=0
+        _sum=$((_sum + _r))
+    done
+
+    printf '%s' "$_sum"
+}
+
+sum_cpu_sec() {
+    _clk=$(getconf CLK_TCK 2>/dev/null) || _clk=100
+    _ticks=0
+
+    for _p in $PIDS; do
+        [ -r "/proc/$_p/stat" ] || continue
+
+        _stat=$(cat "/proc/$_p/stat" 2>/dev/null) || continue
+        _rest=${_stat#*) }
+
+        set -- $_rest
+
+        _ut=${12:-0}
+        _st=${13:-0}
+
+        _ticks=$((_ticks + _ut + _st))
+    done
+
+    printf '%s' $((_ticks / _clk))
+}
+
+print_process_tree() {
+    set -- $PIDS
+    _n=$#
+    _i=0
+
+    for _p do
+        _i=$((_i + 1))
+
+        if [ "$_i" -eq "$_n" ]; then
+            _branch='└─'
+        else
+            _branch='├─'
+        fi
+
+        _args=$(ps -o args= -p "$_p" 2>/dev/null | sed 's/^[[:space:]]*//; s/"/\\"/g')
+        [ -n "$_args" ] || _args="[$_p]"
+
+        printf '             %s%s "%s"\n' "$_branch" "$_p" "$_args"
+    done
+}
+
+find_log_file() {
+    _svc=$1
+    _unit=$2
+
+    for _f in \
+        "/var/log/$_svc/current" \
+        "/var/log/$_svc/error.log" \
+        "/var/log/$_svc.log" \
+        "/var/log/runit/$_svc/current" \
+        "/var/log/sv/$_svc/current"
+    do
+        [ -r "$_f" ] && {
+            printf '%s\n' "$_f"
+            return
+        }
+    done
+
+    if [ -n "$_unit" ] && [ -d "$_unit" ] && [ -r "$_unit/log/run" ]; then
+        for _d in $(tr " '\"\t" '\n\n\n\n' < "$_unit/log/run" 2>/dev/null | sed -n '/^\//p'); do
+            [ -r "$_d/current" ] && {
+                printf '%s\n' "$_d/current"
+                return
+            }
+        done
+    fi
+}
+
+maybe_tai64nlocal() {
+    _tmp=$(mktemp "${TMPDIR:-/tmp}/wuw.XXXXXX") || return
+
+    cat > "$_tmp" 2>/dev/null || return
+
+    _c=$(sed -n '1s/^\(.\).*/\1/p' "$_tmp")
+
+    if [ "$_c" = '@' ] && command -v tai64nlocal >/dev/null 2>&1; then
+        tai64nlocal < "$_tmp"
+    else
+        cat "$_tmp"
+    fi
+
+    rm -f "$_tmp"
+}
+
+print_logs() {
+    _log=$(find_log_file "$SVC" "$UNIT_PATH")
+
+    if [ -n "$_log" ]; then
+        tail -n "$LINES" "$_log" 2>/dev/null | maybe_tai64nlocal
+        return
+    fi
+
+    _files=''
+
+    for _f in \
+        /var/log/socklog/daemon/current \
+        /var/log/socklog/main/current \
+        /var/log/socklog/user/current \
+        /var/log/messages \
+        /var/log/syslog
+    do
+        [ -r "$_f" ] && _files="$_files $_f"
+    done
+
+    if [ -n "$_files" ]; then
+        grep -h -- "$SVC" $_files 2>/dev/null | tail -n "$LINES" | maybe_tai64nlocal
+    fi
+}
+
+sysv_enabled_state() {
+    _svc=$1
+
+    for _l in /etc/rc2.d/S??"$_svc" /etc/rc3.d/S??"$_svc" /etc/rc4.d/S??"$_svc" /etc/rc5.d/S??"$_svc"; do
+        [ -e "$_l" ] && {
+            printf 'enabled'
+            return
+        }
+    done
+
+    printf 'disabled'
+}
+
+pid_from_pidfile() {
+    _svc=$1
+
+    for _f in \
+        "/run/$_svc.pid" \
+        "/var/run/$_svc.pid" \
+        "/run/$_svc/$_svc.pid" \
+        "/var/run/$_svc/$_svc.pid"
+    do
+        if [ -r "$_f" ]; then
+            _pid=$(sed -n '1s/[^0-9].*$//p' "$_f" 2>/dev/null)
+            case "$_pid" in
+                ''|*[!0-9]*) ;;
+                *)
+                    [ -d "/proc/$_pid" ] && {
+                        printf '%s\n' "$_pid"
+                        return
+                    } ;;
+            esac
+        fi
+    done
+}
+
+pid_from_status_output() {
+    printf '%s\n' "$1" | sed -n 's/.*[Pp][Ii][Dd][[:space:]:=]*(\{0,1\}\([0-9][0-9]*\).*/\1/p' | sed -n '1p'
+}
+
+find_main_pid() {
+    _svc=$1
+    _out=$2
+
+    _pid=$(pid_from_pidfile "$_svc")
+    [ -n "$_pid" ] && {
+        printf '%s\n' "$_pid"
+        return
+    }
+
+    _pid=$(pid_from_status_output "$_out")
+    case "$_pid" in
+        ''|*[!0-9]*) ;;
+        *)
+            [ -d "/proc/$_pid" ] && {
+                printf '%s\n' "$_pid"
+                return
+            } ;;
+    esac
+
+    if command -v pidof >/dev/null 2>&1; then
+        set -- $(pidof "$_svc" 2>/dev/null)
+        case "${1:-}" in
+            ''|*[!0-9]*) ;;
+            *) printf '%s\n' "$1" ;;
+        esac
+    fi
+}
+
+pid_since_tail() {
+    _pid=$1
+
+    [ -n "$_pid" ] || return
+    [ -d "/proc/$_pid" ] || return
+
+    _ls=$(ps -o lstart= -p "$_pid" 2>/dev/null | sed 's/^[[:space:]]*//')
+    [ -n "$_ls" ] || return
+
+    _since=$(date -d "$_ls" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null)
+    [ -n "$_since" ] || _since=$_ls
+
+    _start=$(date -d "$_ls" '+%s' 2>/dev/null)
+    _now=$(date '+%s' 2>/dev/null)
+
+    if [ -n "$_start" ] && [ -n "$_now" ] && [ "$_now" -ge "$_start" ]; then
+        _secs=$((_now - _start))
+        printf ' since %s; %s' "$_since" "$(human_age "$_secs")"
+    else
+        printf ' since %s' "$_since"
+    fi
+}
+
+case "${1:-}" in
+    -h|--help)
+        usage
+        ;;
+    -n)
+        [ -n "${2:-}" ] || usage
+        LINES=$2
+        case "$LINES" in ''|*[!0-9]*) usage ;; esac
+        shift 2
+        ;;
+esac
+
+[ $# -eq 1 ] || usage
+
+setup_colors
+
+SVC=${1%.service}
+
+case "$SVC" in
+    ''|*/*) usage ;;
+esac
+
+SV_BIN=$(command -v sv 2>/dev/null)
+
+ENABLED_LINK=''
+
+for _d in /etc/service /run/runit/service /service; do
+    if [ -e "$_d/$SVC" ]; then
+        ENABLED_LINK="$_d/$SVC"
+        break
+    fi
+done
+
+UNIT_PATH=''
+
+for _d in /etc/sv /etc/runit/sv; do
+    if [ -e "$_d/$SVC" ]; then
+        UNIT_PATH=$(canonical_path "$_d/$SVC")
+        break
+    fi
+done
+
+INITD_PATH=''
+
+if [ -x "/etc/init.d/$SVC" ]; then
+    INITD_PATH="/etc/init.d/$SVC"
+fi
+
+BACKEND=''
+
+if [ -n "$SV_BIN" ] && { [ -n "$ENABLED_LINK" ] || [ -n "$UNIT_PATH" ]; }; then
+    BACKEND=runit
+elif [ -n "$INITD_PATH" ]; then
+    BACKEND=sysv
+else
+    printf '%b○%b %b%s%b - not found\n' "$RED" "$RESET" "$BOLD" "$SVC" "$RESET"
+    printf '     Loaded: %bnot-found%b (no /etc/service/%s, /etc/sv/%s or /etc/init.d/%s)\n' "$RED" "$RESET" "$SVC" "$SVC" "$SVC"
+    printf '     Active: %binactive (dead)%b\n' "$GREY" "$RESET"
+    exit 4
+fi
+
+DESC=$(desc_from_files "$SVC" "$UNIT_PATH")
+
+PID=''
+PIDS=''
+ACTIVE_STATE='inactive (dead)'
+ACTIVE_TAIL=''
+ACTIVE_COLOR=$GREY
+DOT_COLOR=$GREY
+EXIT_CODE=3
+ENABLED='disabled'
+ENABLED_COLOR=$GREY
+LOAD_EXTRA=''
+
+if [ "$BACKEND" = runit ]; then
+    if [ -n "$ENABLED_LINK" ]; then
+        SVDIR=$ENABLED_LINK
+        ENABLED=enabled
+        ENABLED_COLOR=$GREEN
+        [ -n "$UNIT_PATH" ] || UNIT_PATH=$(canonical_path "$ENABLED_LINK")
+        LOAD_EXTRA="; service link: $ENABLED_LINK"
+        SVOUT=$(sv status "$SVDIR" 2>&1)
+    else
+        SVDIR=$UNIT_PATH
+        ENABLED=disabled
+        ENABLED_COLOR=$GREY
+        SVOUT=''
+    fi
+
+    if [ "$ENABLED" = enabled ]; then
+        case "$SVOUT" in
+            run:*)
+                PID=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
+                SECS=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid [0-9][0-9]*) \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
+
+                ACTIVE_STATE='active (running)'
+                ACTIVE_COLOR=$GREEN
+                DOT_COLOR=$GREEN
+                EXIT_CODE=0
+
+                if [ -n "$PID" ]; then
+                    _tail=$(pid_since_tail "$PID")
+                    if [ -n "$_tail" ]; then
+                        ACTIVE_TAIL=$_tail
+                    elif [ -n "$SECS" ]; then
+                        ACTIVE_TAIL="; $(human_age "$SECS")"
+                    fi
+                elif [ -n "$SECS" ]; then
+                    ACTIVE_TAIL="; $(human_age "$SECS")"
+                fi
+                ;;
+            down:*)
+                SECS=$(printf '%s\n' "$SVOUT" | sed -n 's/.*: \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
+                ACTIVE_STATE='inactive (dead)'
+                ACTIVE_COLOR=$RED
+                DOT_COLOR=$RED
+                EXIT_CODE=3
+                [ -n "$SECS" ] && ACTIVE_TAIL="; $(human_age "$SECS")"
+                ;;
+            finish:*)
+                PID=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
+                ACTIVE_STATE='deactivating'
+                ACTIVE_TAIL=' (finish script)'
+                ACTIVE_COLOR=$RED
+                DOT_COLOR=$RED
+                EXIT_CODE=3
+                ;;
+            *)
+                ACTIVE_STATE='unknown'
+                ACTIVE_TAIL=" ($SVOUT)"
+                ACTIVE_COLOR=$RED
+                DOT_COLOR=$RED
+                EXIT_CODE=3
+                ;;
+        esac
+    fi
+else
+    UNIT_PATH=$INITD_PATH
+    ENABLED=$(sysv_enabled_state "$SVC")
+    [ "$ENABLED" = enabled ] && ENABLED_COLOR=$GREEN || ENABLED_COLOR=$GREY
+    LOAD_EXTRA='; SysV init script'
+
+    INITOUT=$("$INITD_PATH" status 2>&1)
+    INIT_RC=$?
+
+    case "$INIT_RC:$INITOUT" in
+        *:*[Nn]ot\ running*|*:*stopped*|*:*dead*)
+            ACTIVE_STATE='inactive (dead)'
+            ACTIVE_COLOR=$RED
+            DOT_COLOR=$RED
+            EXIT_CODE=3
+            ;;
+        0:*)
+            ACTIVE_STATE='active (running)'
+            ACTIVE_COLOR=$GREEN
+            DOT_COLOR=$GREEN
+            EXIT_CODE=0
+            ;;
+        3:*)
+            ACTIVE_STATE='inactive (dead)'
+            ACTIVE_COLOR=$RED
+            DOT_COLOR=$RED
+            EXIT_CODE=3
+            ;;
+        *)
+            ACTIVE_STATE='unknown'
+            ACTIVE_TAIL="; init script exit code $INIT_RC"
+            ACTIVE_COLOR=$RED
+            DOT_COLOR=$RED
+            EXIT_CODE=3
+            ;;
+    esac
+
+    if [ "$EXIT_CODE" -eq 0 ]; then
+        PID=$(find_main_pid "$SVC" "$INITOUT")
+        [ -n "$PID" ] && ACTIVE_TAIL=$(pid_since_tail "$PID")
+    fi
+fi
+
+printf '%b●%b %b%s%b - %s\n' "$DOT_COLOR" "$RESET" "$BOLD" "$SVC" "$RESET" "$DESC"
+
+printf '     Loaded: loaded (%s; ' "$UNIT_PATH"
+printf '%b%s%b' "$ENABLED_COLOR" "$ENABLED" "$RESET"
+printf '%s)\n' "$LOAD_EXTRA"
+
+printf '     Active: %b%s%b%s\n' "$ACTIVE_COLOR" "$ACTIVE_STATE" "$RESET" "$ACTIVE_TAIL"
+
+if [ -n "$PID" ]; then
+    PIDS=$(descendant_pids "$PID")
+    [ -n "$PIDS" ] || PIDS=$PID
+
+    TASKS=$(sum_threads)
+    RSS_KB=$(sum_rss_kb)
+    CPU_SEC=$(sum_cpu_sec)
+
+    printf '   Main PID: %s (%s)\n' "$PID" "$(ps -o comm= -p "$PID" 2>/dev/null | sed 's/^[[:space:]]*//')"
+    printf '      Tasks: %s\n' "$TASKS"
+    printf '     Memory: %s\n' "$(format_kb "$RSS_KB")"
+    printf '        CPU: %s\n' "$(human_cpu "$CPU_SEC")"
+    printf '     Group: /%s/%s\n' "$BACKEND" "$SVC"
+
+    print_process_tree
+fi
+
+LOGS=$(print_logs)
+
+if [ -n "$LOGS" ]; then
+    printf '\n%s\n' "$LOGS"
+fi
+
+exit "$EXIT_CODE"
