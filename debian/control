@@ -1,0 +1,16 @@
+Source: wuw
+Section: admin
+Priority: optional
+Maintainer: Enabla Package Maintainers <packages@enabla.pl>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+
+Package: wuw
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: runit, socklog
+Description: compact status view for runit and SysV services
+ wuw (what's up with) displays service state, process information, resource
+ use and recent logs in a compact systemd-style view. It supports native
+ runit services and traditional SysV init scripts without requiring systemd.

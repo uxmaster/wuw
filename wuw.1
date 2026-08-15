@@ -1,0 +1,49 @@
+.TH WUW 1 "August 2026" "wuw 1.0.0" "User Commands"
+.SH NAME
+wuw \- show what is happening with a runit or SysV service
+.SH SYNOPSIS
+.B wuw
+.RB [ \-n " lines" ]
+.I service
+.SH DESCRIPTION
+.B wuw
+prints a compact service status containing its enabled and active state,
+process tree, resource use, and recent readable log messages.
+It uses runit when a service directory is present and otherwise falls back to
+the service's SysV init script.
+.SH OPTIONS
+.TP
+.BI \-n " lines"
+Show at most this many recent log lines. The default is 12.
+.TP
+.BR \-h , " " \-\-help
+Display a usage summary.
+.SH ENVIRONMENT
+.TP
+.B WUW_COLOR
+Set to
+.BR auto ,
+.BR always ,
+or
+.BR never .
+.TP
+.B NO_COLOR
+Disable colour in automatic mode when set to a non-empty value.
+.SH EXIT STATUS
+Returns 0 when the service is active, 3 when it is inactive or its state is
+unknown, 4 when no service definition can be found, and 2 for invalid usage.
+.SH FILES
+.TP
+.I /etc/service
+Enabled runit services.
+.TP
+.I /etc/sv
+Runit service definitions.
+.TP
+.I /etc/init.d
+SysV init scripts.
+.TP
+.I /var/log/runit
+Common location for per-service runit logs.
+.SH AUTHOR
+Jacek Stypuła.

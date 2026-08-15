@@ -153,15 +153,19 @@ desc_from_files() {
 descendant_pids() {
     _root=$1
 
-    ps -eo pid=,ppid= 2>/dev/null | awk -v root="$_root" '
-        { pid[NR]=$1; ppid[NR]=$2 }
+    awk -v root="$_root" '
+        /^Pid:/  { current_pid=$2 }
+        /^PPid:/ {
+            pid[++count]=current_pid
+            ppid[count]=$2
+        }
         END {
             alive[root]=1
             changed=1
 
             while (changed) {
                 changed=0
-                for (i=1; i<=NR; i++) {
+                for (i=1; i<=count; i++) {
                     if (alive[ppid[i]] && !alive[pid[i]]) {
                         alive[pid[i]]=1
                         changed=1
@@ -169,10 +173,30 @@ descendant_pids() {
                 }
             }
 
-            for (i=1; i<=NR; i++)
+            for (i=1; i<=count; i++)
                 if (alive[pid[i]]) print pid[i]
         }
-    '
+    ' /proc/[0-9]*/status 2>/dev/null
+}
+
+process_name() {
+    _pid=$1
+
+    if [ -r "/proc/$_pid/comm" ]; then
+        sed -n '1p' "/proc/$_pid/comm"
+    elif command -v ps >/dev/null 2>&1; then
+        ps -o comm= -p "$_pid" 2>/dev/null | sed 's/^[[:space:]]*//'
+    fi
+}
+
+process_args() {
+    _pid=$1
+
+    if [ -r "/proc/$_pid/cmdline" ]; then
+        tr '\000' ' ' < "/proc/$_pid/cmdline" | sed 's/[[:space:]]*$//'
+    elif command -v ps >/dev/null 2>&1; then
+        ps -o args= -p "$_pid" 2>/dev/null | sed 's/^[[:space:]]*//'
+    fi
 }
 
 sum_threads() {
@@ -234,7 +258,7 @@ print_process_tree() {
             _branch='├─'
         fi
 
-        _args=$(ps -o args= -p "$_p" 2>/dev/null | sed 's/^[[:space:]]*//; s/"/\\"/g')
+        _args=$(process_args "$_p" | sed 's/"/\\"/g')
         [ -n "$_args" ] || _args="[$_p]"
 
         printf '             %s%s "%s"\n' "$_branch" "$_p" "$_args"
@@ -493,8 +517,10 @@ if [ "$BACKEND" = runit ]; then
     if [ "$ENABLED" = enabled ]; then
         case "$SVOUT" in
             run:*)
-                PID=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
-                SECS=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid [0-9][0-9]*) \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
+                PID=$(printf '%s\n' "$SVOUT" | sed -n \
+                    's/^[^(]*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
+                SECS=$(printf '%s\n' "$SVOUT" | sed -n \
+                    's/^[^(]*(pid [0-9][0-9]*) \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
 
                 ACTIVE_STATE='active (running)'
                 ACTIVE_COLOR=$GREEN
@@ -596,7 +622,7 @@ if [ -n "$PID" ]; then
     RSS_KB=$(sum_rss_kb)
     CPU_SEC=$(sum_cpu_sec)
 
-    printf '   Main PID: %s (%s)\n' "$PID" "$(ps -o comm= -p "$PID" 2>/dev/null | sed 's/^[[:space:]]*//')"
+    printf '   Main PID: %s (%s)\n' "$PID" "$(process_name "$PID")"
     printf '      Tasks: %s\n' "$TASKS"
     printf '     Memory: %s\n' "$(format_kb "$RSS_KB")"
     printf '        CPU: %s\n' "$(human_cpu "$CPU_SEC")"
