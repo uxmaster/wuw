@@ -55,6 +55,43 @@ service state, 4 when the service cannot be found, and 2 for invalid usage.
 Reading protected service logs may require membership in `adm` or running the
 command through `sudo`.
 
+### Passwordless status for `adm`
+
+An administrator can allow members of `adm` to run only the supported status
+forms of `wuw` as root without a password. This is optional and is not enabled
+by the package.
+
+Use `sudo` 1.9.10 or newer (argument regular expressions were added in that
+release), and create the policy with:
+
+```sh
+sudo visudo -f /etc/sudoers.d/wuw-adm
+```
+
+Enter these two lines:
+
+```sudoers
+Cmnd_Alias WUW_STATUS = /usr/bin/wuw ^([A-Za-z0-9_][A-Za-z0-9_.@:+-]*|-n [0-9]+ [A-Za-z0-9_][A-Za-z0-9_.@:+-]*)$
+%adm ALL=(root) NOPASSWD: NOSETENV: WUW_STATUS
+```
+
+Then verify the policy and file metadata:
+
+```sh
+sudo chown root:root /etc/sudoers.d/wuw-adm
+sudo chmod 0440 /etc/sudoers.d/wuw-adm
+sudo visudo -c
+id -nG
+command -v wuw
+sudo -k
+sudo -n /usr/bin/wuw mysql
+```
+
+The current login must include `adm`, and `command -v wuw` must report
+`/usr/bin/wuw`. Log out and back in after adding a user to `adm`. If the final
+test does not match the rule, inspect the effective policy with
+`sudo -ll /usr/bin/wuw mysql`.
+
 ## Building the Debian package
 
 Install the Debian packaging tools and build from the repository root:
