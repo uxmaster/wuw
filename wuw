@@ -238,14 +238,53 @@ sum_threads() {
 
 sum_rss_kb() {
     _sum=0
+    _proc=${WUW_PROC_ROOT:-/proc}
 
     for _p in $PIDS; do
-        _r=$(sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "/proc/$_p/status" 2>/dev/null | sed -n '1p')
+        _r=$(sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+            "$_proc/$_p/status" 2>/dev/null | sed -n '1p')
         [ -n "$_r" ] || _r=0
         _sum=$((_sum + _r))
     done
 
     printf '%s' "$_sum"
+}
+
+measure_memory_kb() {
+    _pss_sum=0
+    _pte_sum=0
+    _proc=${WUW_PROC_ROOT:-/proc}
+
+    for _p in $PIDS; do
+        _values=$(awk '
+            $1 == "Pss:" {
+                pss=$2
+                have_pss=1
+            }
+            $1 == "VmPTE:" { pte=$2 }
+            END {
+                if (!have_pss) exit 1
+                print pss, pte+0
+            }
+        ' "$_proc/$_p/smaps_rollup" "$_proc/$_p/status" 2>/dev/null) || {
+            printf '%s RSS' "$(sum_rss_kb)"
+            return
+        }
+
+        set -- $_values
+        case "${1:-}" in ''|*[!0-9]*)
+            printf '%s RSS' "$(sum_rss_kb)"
+            return
+        esac
+        case "${2:-}" in ''|*[!0-9]*)
+            printf '%s RSS' "$(sum_rss_kb)"
+            return
+        esac
+        _pss_sum=$((_pss_sum + $1))
+        _pte_sum=$((_pte_sum + $2))
+    done
+
+    printf '%s estimated' "$((_pss_sum + _pte_sum))"
 }
 
 sum_cpu_sec() {
@@ -450,6 +489,10 @@ pid_since_tail() {
     fi
 }
 
+if [ "${WUW_TEST_SOURCE_ONLY:-0}" = 1 ]; then
+    return 0 2>/dev/null || exit 0
+fi
+
 case "${1:-}" in
     --list-services)
         [ "$#" -eq 1 ] || usage
@@ -649,12 +692,14 @@ if [ -n "$PID" ]; then
     [ -n "$PIDS" ] || PIDS=$PID
 
     TASKS=$(sum_threads)
-    RSS_KB=$(sum_rss_kb)
+    set -- $(measure_memory_kb)
+    MEMORY_KB=$1
+    MEMORY_KIND=$2
     CPU_SEC=$(sum_cpu_sec)
 
     printf '   Main PID: %s (%s)\n' "$PID" "$(process_name "$PID")"
     printf '      Tasks: %s\n' "$TASKS"
-    printf '     Memory: %s\n' "$(format_kb "$RSS_KB")"
+    printf '     Memory: %s (%s)\n' "$(format_kb "$MEMORY_KB")" "$MEMORY_KIND"
     printf '        CPU: %s\n' "$(human_cpu "$CPU_SEC")"
     printf '     Group: /%s/%s\n' "$BACKEND" "$SVC"
 

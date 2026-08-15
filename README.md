@@ -42,6 +42,14 @@ The default is 12 log lines. Set `WUW_COLOR=always` or `WUW_COLOR=never` to
 override automatic terminal colour detection. The standard `NO_COLOR`
 environment variable is also honoured.
 
+Memory is estimated by adding proportional set size (PSS) and page-table
+memory for the main process and all its descendants. This avoids counting
+shared mappings once per process and is the closest useful approximation of
+systemd's cgroup accounting without placing runit services in cgroups. Reading
+PSS may require root for services running as another user. If any process's
+PSS is inaccessible, WUW reports the summed resident set size for the complete
+process tree and labels it `(RSS)` instead of mixing accounting methods.
+
 The exit status is 0 for an active service, 3 for an inactive or unknown
 service state, 4 when the service cannot be found, and 2 for invalid usage.
 Reading protected service logs may require membership in `adm` or running the

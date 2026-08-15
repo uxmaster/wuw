@@ -17,6 +17,32 @@ services=$(WUW_ROOT=$root "$base/wuw" --list-services)
 mysql
 sshguard" ]
 
+WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
+mkdir -p "$root/proc/101" "$root/proc/102"
+cat >"$root/proc/101/status" <<'EOF'
+VmRSS:        2000 kB
+VmPTE:          40 kB
+EOF
+cat >"$root/proc/101/smaps_rollup" <<'EOF'
+Rss:          2000 kB
+Pss:          1000 kB
+EOF
+cat >"$root/proc/102/status" <<'EOF'
+VmRSS:        1000 kB
+VmPTE:          20 kB
+EOF
+cat >"$root/proc/102/smaps_rollup" <<'EOF'
+Rss:          1000 kB
+Pss:           500 kB
+EOF
+PIDS='101 102'
+WUW_PROC_ROOT=$root/proc
+export WUW_PROC_ROOT
+[ "$(measure_memory_kb)" = '1560 estimated' ]
+rm "$root/proc/102/smaps_rollup"
+[ "$(measure_memory_kb)" = '3000 RSS' ]
+unset WUW_PROC_ROOT WUW_TEST_SOURCE_ONLY
+
 set +e
 help=$($base/wuw --help 2>&1)
 help_status=$?
