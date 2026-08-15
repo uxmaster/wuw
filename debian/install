@@ -1,1 +1,4 @@
 wuw usr/bin
+completions/bash/wuw usr/share/bash-completion/completions
+completions/zsh/_wuw usr/share/zsh/vendor-completions
+completions/fish/wuw.fish usr/share/fish/vendor_completions.d

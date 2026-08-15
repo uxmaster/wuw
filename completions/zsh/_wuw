@@ -1,0 +1,19 @@
+#compdef wuw
+
+_wuw()
+{
+    local -a services
+
+    _arguments -s \
+        '(-n -h --help 1)--list-services[list discoverable services]' \
+        '(-n --list-services 1)'{-h,--help}'[display usage]' \
+        '(-h --help --list-services 1)-n+[number of recent log lines]:lines:' \
+        '(-h --help --list-services)1:service:->services'
+
+    if [[ $state == services ]]; then
+        services=("${(@f)$(command wuw --list-services 2>/dev/null)}")
+        _describe 'service' services
+    fi
+}
+
+_wuw "$@"

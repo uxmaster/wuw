@@ -23,6 +23,7 @@ sudo apt install wuw
 
 ```text
 wuw [-n lines] SERVICE
+wuw --list-services
 ```
 
 Examples:
@@ -32,6 +33,10 @@ wuw ssh
 wuw mysql
 wuw -n 30 sshguard
 ```
+
+Service names are completed dynamically in Bash, Zsh, and Fish from available
+runit service directories and executable SysV init scripts. Bash users need
+the suggested `bash-completion` package.
 
 The default is 12 log lines. Set `WUW_COLOR=always` or `WUW_COLOR=never` to
 override automatic terminal colour detection. The standard `NO_COLOR`

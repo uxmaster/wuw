@@ -5,8 +5,33 @@ DEFAULT_LINES=12
 LINES=$DEFAULT_LINES
 
 usage() {
-    echo "usage: wuw [-n lines] SERVICE" >&2
+    echo "usage: wuw [-n lines] SERVICE
+       wuw --list-services" >&2
     exit 2
+}
+
+list_services() {
+    _root=${WUW_ROOT:-}
+    _root=${_root%/}
+
+    for _d in \
+        "$_root/etc/service" \
+        "$_root/run/runit/service" \
+        "$_root/service" \
+        "$_root/etc/sv" \
+        "$_root/etc/runit/sv" \
+        "$_root/etc/init.d"
+    do
+        [ -d "$_d" ] || continue
+
+        for _path in "$_d"/*; do
+            [ -e "$_path" ] || continue
+            if [ "$_d" = "$_root/etc/init.d" ] && [ ! -x "$_path" ]; then
+                continue
+            fi
+            printf '%s\n' "${_path##*/}"
+        done
+    done | LC_ALL=C sort -u
 }
 
 setup_colors() {
@@ -426,6 +451,11 @@ pid_since_tail() {
 }
 
 case "${1:-}" in
+    --list-services)
+        [ "$#" -eq 1 ] || usage
+        list_services
+        exit 0
+        ;;
     -h|--help)
         usage
         ;;

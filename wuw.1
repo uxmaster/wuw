@@ -1,10 +1,12 @@
-.TH WUW 1 "August 2026" "wuw 1.0.0" "User Commands"
+.TH WUW 1 "August 2026" "wuw 1.0.1" "User Commands"
 .SH NAME
 wuw \- show what is happening with a runit or SysV service
 .SH SYNOPSIS
 .B wuw
 .RB [ \-n " lines" ]
 .I service
+.br
+.B wuw \-\-list-services
 .SH DESCRIPTION
 .B wuw
 prints a compact service status containing its enabled and active state,
@@ -18,6 +20,10 @@ Show at most this many recent log lines. The default is 12.
 .TP
 .BR \-h , " " \-\-help
 Display a usage summary.
+.TP
+.B \-\-list-services
+List discoverable runit and SysV service names, one per line. This interface is
+used by the packaged shell completions.
 .SH ENVIRONMENT
 .TP
 .B WUW_COLOR

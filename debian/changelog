@@ -1,3 +1,9 @@
+wuw (1.0.1) unstable; urgency=medium
+
+  * Add dynamic Bash, Zsh and Fish service-name completion.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sat, 15 Aug 2026 17:00:00 +0200
+
 wuw (1.0.0) unstable; urgency=medium
 
   * Initial Enabla package.

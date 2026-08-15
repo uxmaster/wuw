@@ -1,0 +1,45 @@
+_wuw_service_names()
+{
+    command wuw --list-services 2>/dev/null
+}
+
+_wuw()
+{
+    local cur prev i expect_lines service_seen
+
+    COMPREPLY=()
+    cur=${COMP_WORDS[COMP_CWORD]}
+    prev=
+    if (( COMP_CWORD > 0 )); then
+        prev=${COMP_WORDS[COMP_CWORD-1]}
+    fi
+
+    if [[ $prev == -n ]]; then
+        return
+    fi
+
+    if [[ $cur == -* ]]; then
+        COMPREPLY=( $(compgen -W '-n -h --help --list-services' -- "$cur") )
+        return
+    fi
+
+    expect_lines=0
+    service_seen=0
+    for ((i=1; i<COMP_CWORD; i++)); do
+        if (( expect_lines )); then
+            expect_lines=0
+            continue
+        fi
+        case ${COMP_WORDS[i]} in
+            -n) expect_lines=1 ;;
+            -h|--help|--list-services) service_seen=1 ;;
+            -*) ;;
+            *) service_seen=1 ;;
+        esac
+    done
+
+    (( service_seen )) && return
+    COMPREPLY=( $(compgen -W "$(_wuw_service_names)" -- "$cur") )
+}
+
+complete -F _wuw wuw
