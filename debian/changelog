@@ -2,6 +2,7 @@ wuw (1.0.2) unstable; urgency=medium
 
   * Approximate service memory with PSS and page-table usage.
   * Label the whole-tree RSS fallback when PSS is inaccessible.
+  * Prefer active runit log paths over generic service logs.
 
  -- Enabla Package Maintainers <packages@enabla.pl>  Sat, 15 Aug 2026 20:56:00 +0200
 

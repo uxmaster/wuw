@@ -43,6 +43,14 @@ rm "$root/proc/102/smaps_rollup"
 [ "$(measure_memory_kb)" = '3000 RSS' ]
 unset WUW_PROC_ROOT WUW_TEST_SOURCE_ONLY
 
+mkdir -p "$root/var/log/proxy" "$root/var/log/runit/proxy"
+: >"$root/var/log/proxy/current"
+printf 'active runit log\n' >"$root/var/log/runit/proxy/current"
+WUW_ROOT=$root
+export WUW_ROOT
+[ "$(find_log_file proxy '')" = "$root/var/log/runit/proxy/current" ]
+unset WUW_ROOT
+
 set +e
 help=$($base/wuw --help 2>&1)
 help_status=$?

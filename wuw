@@ -332,28 +332,33 @@ print_process_tree() {
 find_log_file() {
     _svc=$1
     _unit=$2
+    _root=${WUW_ROOT:-}
+    _root=${_root%/}
 
+    # A literal directory in the active logger definition is authoritative.
+    if [ -n "$_unit" ] && [ -d "$_unit" ] && [ -r "$_unit/log/run" ]; then
+        for _d in $(tr " '\"\t" '\n\n\n\n' < "$_unit/log/run" 2>/dev/null | sed -n '/^\//p'); do
+            [ -r "$_root$_d/current" ] && {
+                printf '%s\n' "$_root$_d/current"
+                return
+            }
+        done
+    fi
+
+    # Prefer the runit conventions over generic paths, which may contain a
+    # stale log left behind after a logger configuration change.
     for _f in \
-        "/var/log/$_svc/current" \
-        "/var/log/$_svc/error.log" \
-        "/var/log/$_svc.log" \
-        "/var/log/runit/$_svc/current" \
-        "/var/log/sv/$_svc/current"
+        "$_root/var/log/runit/$_svc/current" \
+        "$_root/var/log/sv/$_svc/current" \
+        "$_root/var/log/$_svc/current" \
+        "$_root/var/log/$_svc/error.log" \
+        "$_root/var/log/$_svc.log"
     do
         [ -r "$_f" ] && {
             printf '%s\n' "$_f"
             return
         }
     done
-
-    if [ -n "$_unit" ] && [ -d "$_unit" ] && [ -r "$_unit/log/run" ]; then
-        for _d in $(tr " '\"\t" '\n\n\n\n' < "$_unit/log/run" 2>/dev/null | sed -n '/^\//p'); do
-            [ -r "$_d/current" ] && {
-                printf '%s\n' "$_d/current"
-                return
-            }
-        done
-    fi
 }
 
 maybe_tai64nlocal() {
