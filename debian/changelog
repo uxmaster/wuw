@@ -1,3 +1,10 @@
+wuw (1.0.3) unstable; urgency=medium
+
+  * Resolve enabled runit services through the directory supervised by
+    runsvdir, even when a different definition exists under /etc/sv.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sun, 16 Aug 2026 21:00:00 +0200
+
 wuw (1.0.2) unstable; urgency=medium
 
   * Approximate service memory with PSS and page-table usage.

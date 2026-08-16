@@ -18,6 +18,14 @@ mysql
 sshguard" ]
 
 WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
+
+# The directory referenced by the supervised service link is authoritative,
+# even if a different definition with the same name exists under /etc/sv.
+mkdir -p "$root/usr/share/runit/sv.now/exim4" "$root/etc/sv/exim4"
+ln -s ../../usr/share/runit/sv.now/exim4 "$root/etc/service/exim4"
+[ "$(resolve_runit_unit_path exim4 "$root/etc/service/exim4")" = \
+    "$root/usr/share/runit/sv.now/exim4" ]
+
 mkdir -p "$root/proc/101" "$root/proc/102"
 cat >"$root/proc/101/status" <<'EOF'
 VmRSS:        2000 kB

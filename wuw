@@ -72,6 +72,26 @@ canonical_path() {
     (cd -P "$_d" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$_b") || printf '%s\n' "$1"
 }
 
+resolve_runit_unit_path() {
+    _svc=$1
+    _enabled_link=${2:-}
+
+    # The enabled service is the directory actually watched by runsvdir.  It
+    # may deliberately point somewhere other than the same-named /etc/sv
+    # directory (for example, runit-services uses sv.current/sv.now trees).
+    if [ -n "$_enabled_link" ] && [ -e "$_enabled_link" ]; then
+        canonical_path "$_enabled_link"
+        return
+    fi
+
+    for _definition_dir in /etc/sv /etc/runit/sv; do
+        if [ -e "$_definition_dir/$_svc" ]; then
+            canonical_path "$_definition_dir/$_svc"
+            return
+        fi
+    done
+}
+
 human_age() {
     _s=$1
     [ -n "$_s" ] || {
@@ -536,14 +556,7 @@ for _d in /etc/service /run/runit/service /service; do
     fi
 done
 
-UNIT_PATH=''
-
-for _d in /etc/sv /etc/runit/sv; do
-    if [ -e "$_d/$SVC" ]; then
-        UNIT_PATH=$(canonical_path "$_d/$SVC")
-        break
-    fi
-done
+UNIT_PATH=$(resolve_runit_unit_path "$SVC" "$ENABLED_LINK")
 
 INITD_PATH=''
 
@@ -582,7 +595,6 @@ if [ "$BACKEND" = runit ]; then
         SVDIR=$ENABLED_LINK
         ENABLED=enabled
         ENABLED_COLOR=$GREEN
-        [ -n "$UNIT_PATH" ] || UNIT_PATH=$(canonical_path "$ENABLED_LINK")
         LOAD_EXTRA="; service link: $ENABLED_LINK"
         SVOUT=$(sv status "$SVDIR" 2>&1)
     else
