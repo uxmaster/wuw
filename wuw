@@ -445,7 +445,7 @@ pid_from_pidfile() {
         "/var/run/$_svc/$_svc.pid"
     do
         if [ -r "$_f" ]; then
-            _pid=$(sed -n '1s/[^0-9].*$//p' "$_f" 2>/dev/null)
+            _pid=$(read_pidfile "$_f")
             case "$_pid" in
                 ''|*[!0-9]*) ;;
                 *)
@@ -456,6 +456,14 @@ pid_from_pidfile() {
             esac
         fi
     done
+}
+
+read_pidfile() {
+    sed -n '1 {
+        s/^[[:space:]]*//
+        s/[^0-9].*$//
+        p
+    }' "$1" 2>/dev/null
 }
 
 pid_from_status_output() {

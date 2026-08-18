@@ -19,6 +19,11 @@ sshguard" ]
 
 WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
 
+printf '1607\n' >"$root/plain.pid"
+printf '  1608 extra fields\n' >"$root/decorated.pid"
+[ "$(read_pidfile "$root/plain.pid")" = 1607 ]
+[ "$(read_pidfile "$root/decorated.pid")" = 1608 ]
+
 # The directory referenced by the supervised service link is authoritative,
 # even if a different definition with the same name exists under /etc/sv.
 mkdir -p "$root/usr/share/runit/sv.now/exim4" "$root/etc/sv/exim4"
