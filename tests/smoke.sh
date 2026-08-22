@@ -24,6 +24,13 @@ printf '  1608 extra fields\n' >"$root/decorated.pid"
 [ "$(read_pidfile "$root/plain.pid")" = 1607 ]
 [ "$(read_pidfile "$root/decorated.pid")" = 1608 ]
 
+mkdir -p "$root/run/php" "$root/proc/1618"
+printf '1618\n' >"$root/run/php/php8.4-fpm.pid"
+WUW_ROOT=$root WUW_PROC_ROOT=$root/proc
+export WUW_ROOT WUW_PROC_ROOT
+[ "$(pid_from_pidfile php8.4-fpm)" = 1618 ]
+unset WUW_ROOT WUW_PROC_ROOT
+
 # The directory referenced by the supervised service link is authoritative,
 # even if a different definition with the same name exists under /etc/sv.
 mkdir -p "$root/usr/share/runit/sv.now/exim4" "$root/etc/sv/exim4"

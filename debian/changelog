@@ -1,3 +1,10 @@
+wuw (1.0.5) unstable; urgency=medium
+
+  * Discover SysV pidfiles in one-level runtime subdirectories such as
+    /run/php.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sat, 22 Aug 2026 15:20:00 +0200
+
 wuw (1.0.4) unstable; urgency=medium
 
   * Read plain numeric SysV pidfiles when status output omits the process ID.

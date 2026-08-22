@@ -437,19 +437,24 @@ sysv_enabled_state() {
 
 pid_from_pidfile() {
     _svc=$1
+    _root=${WUW_ROOT:-}
+    _root=${_root%/}
+    _proc=${WUW_PROC_ROOT:-/proc}
 
     for _f in \
-        "/run/$_svc.pid" \
-        "/var/run/$_svc.pid" \
-        "/run/$_svc/$_svc.pid" \
-        "/var/run/$_svc/$_svc.pid"
+        "$_root/run/$_svc.pid" \
+        "$_root/var/run/$_svc.pid" \
+        "$_root/run/$_svc/$_svc.pid" \
+        "$_root/var/run/$_svc/$_svc.pid" \
+        "$_root"/run/*/"$_svc.pid" \
+        "$_root"/var/run/*/"$_svc.pid"
     do
         if [ -r "$_f" ]; then
             _pid=$(read_pidfile "$_f")
             case "$_pid" in
                 ''|*[!0-9]*) ;;
                 *)
-                    [ -d "/proc/$_pid" ] && {
+                    [ -d "$_proc/$_pid" ] && {
                         printf '%s\n' "$_pid"
                         return
                     } ;;
