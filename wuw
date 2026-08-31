@@ -527,6 +527,34 @@ pid_since_tail() {
     fi
 }
 
+run_as_root() {
+    [ "$(id -u)" -ne 0 ] || return
+
+    command -v sudo >/dev/null 2>&1 || {
+        echo 'wuw: service status requires root, but sudo is unavailable' >&2
+        exit 1
+    }
+
+    _self=$0
+    case "$_self" in
+        /*) ;;
+        */*) _self=$(canonical_path "$_self") ;;
+        *)
+            _self=$(command -v "$_self" 2>/dev/null) || {
+                echo "wuw: cannot resolve executable path: $0" >&2
+                exit 1
+            }
+            _self=$(canonical_path "$_self")
+            ;;
+    esac
+
+    if [ "$LINES" -eq "$DEFAULT_LINES" ]; then
+        exec sudo -- "$_self" "$SVC"
+    else
+        exec sudo -- "$_self" -n "$LINES" "$SVC"
+    fi
+}
+
 if [ "${WUW_TEST_SOURCE_ONLY:-0}" = 1 ]; then
     return 0 2>/dev/null || exit 0
 fi
@@ -589,6 +617,8 @@ else
     printf '     Active: %binactive (dead)%b\n' "$GREY" "$RESET"
     exit 4
 fi
+
+run_as_root
 
 DESC=$(desc_from_files "$SVC" "$UNIT_PATH")
 

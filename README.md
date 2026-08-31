@@ -10,6 +10,11 @@ Runit services and their dedicated loggers are discovered under the usual
 Devuan paths. If no runit service is available, `wuw` falls back to
 `/etc/init.d/SERVICE status`.
 
+Complete status inspection requires root privileges. When an existing service
+is requested by another user, `wuw` automatically re-executes its absolute
+path through `sudo`. Service listing and shell completion remain unprivileged
+and never invoke `sudo`.
+
 ## Installation
 
 On a machine configured to use the Enabla Devuan repository:
@@ -45,21 +50,20 @@ environment variable is also honoured.
 Memory is estimated by adding proportional set size (PSS) and page-table
 memory for the main process and all its descendants. This avoids counting
 shared mappings once per process and is the closest useful approximation of
-systemd's cgroup accounting without placing runit services in cgroups. Reading
-PSS may require root for services running as another user. If any process's
-PSS is inaccessible, WUW reports the summed resident set size for the complete
-process tree and labels it `(RSS)` instead of mixing accounting methods.
+systemd's cgroup accounting without placing runit services in cgroups. If any
+process's PSS remains inaccessible, WUW reports the summed resident set size
+for the complete process tree and labels it `(RSS)` instead of mixing
+accounting methods.
 
 The exit status is 0 for an active service, 3 for an inactive or unknown
-service state, 4 when the service cannot be found, and 2 for invalid usage.
-Reading protected service logs may require membership in `adm` or running the
-command through `sudo`.
+service state, 4 when the service cannot be found, and 2 for invalid usage. If
+automatic privilege elevation fails, `wuw` returns `sudo`'s failure status.
 
 ### Passwordless status for `adm`
 
 An administrator can allow members of `adm` to run only the supported status
-forms of `wuw` as root without a password. This is optional and is not enabled
-by the package.
+forms of `wuw` as root without a password. This makes automatic elevation
+transparent and is optional; it is not enabled by the package.
 
 Use `sudo` 1.9.10 or newer (argument regular expressions were added in that
 release), and create the policy with:

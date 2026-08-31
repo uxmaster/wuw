@@ -1,3 +1,10 @@
+wuw (1.0.6) unstable; urgency=medium
+
+  * Re-execute service status through sudo when invoked without root
+    privileges, while keeping service listing unprivileged.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Mon, 31 Aug 2026 15:00:00 +0200
+
 wuw (1.0.5) unstable; urgency=medium
 
   * Discover SysV pidfiles in one-level runtime subdirectories such as
