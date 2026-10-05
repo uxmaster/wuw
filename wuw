@@ -3,9 +3,10 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DEFAULT_LINES=12
 LINES=$DEFAULT_LINES
+LOG_MODE=
 
 usage() {
-    echo "usage: wuw [-n lines] SERVICE
+    echo "usage: wuw [-n lines] SERVICE [l]
        wuw --list-services" >&2
     exit 2
 }
@@ -397,6 +398,33 @@ maybe_tai64nlocal() {
     rm -f "$_tmp"
 }
 
+page_logs() {
+    _log=$(find_log_file "$SVC" "$UNIT_PATH")
+    [ -n "$_log" ] || {
+        echo "wuw: no readable per-service log for $SVC" >&2
+        exit 1
+    }
+    command -v less >/dev/null 2>&1 || {
+        echo 'wuw: log browsing requires less' >&2
+        exit 1
+    }
+
+    set --
+    case "$_log" in
+        */current)
+            for _f in "${_log%/*}"/@*.s; do
+                [ -f "$_f" ] && [ -r "$_f" ] || continue
+                set -- "$_f" "$@"
+            done
+            ;;
+    esac
+
+    # Direct files allow seeking to EOF without reading the whole history.
+    # Secure mode prevents shell/editor escapes after automatic sudo elevation.
+    unset LINES
+    LESSSECURE=1 LESSSECURE_ALLOW= LESSNOCONFIG= exec less -n --follow-name ++G -- "$_log" "$@"
+}
+
 print_logs() {
     _log=$(find_log_file "$SVC" "$UNIT_PATH")
 
@@ -531,7 +559,7 @@ run_as_root() {
     [ "$(id -u)" -ne 0 ] || return
 
     command -v sudo >/dev/null 2>&1 || {
-        echo 'wuw: service status requires root, but sudo is unavailable' >&2
+        echo 'wuw: service inspection requires root, but sudo is unavailable' >&2
         exit 1
     }
 
@@ -548,11 +576,10 @@ run_as_root() {
             ;;
     esac
 
-    if [ "$LINES" -eq "$DEFAULT_LINES" ]; then
-        exec sudo -- "$_self" "$SVC"
-    else
-        exec sudo -- "$_self" -n "$LINES" "$SVC"
-    fi
+    set -- "$SVC"
+    [ "$LOG_MODE" != l ] || set -- "$@" l
+    [ "$LINES" -eq "$DEFAULT_LINES" ] || set -- -n "$LINES" "$@"
+    exec sudo -- "$_self" "$@"
 }
 
 if [ "${WUW_TEST_SOURCE_ONLY:-0}" = 1 ]; then
@@ -576,11 +603,12 @@ case "${1:-}" in
         ;;
 esac
 
-[ $# -eq 1 ] || usage
+[ $# -eq 1 ] || { [ $# -eq 2 ] && [ "$2" = l ] || usage; }
 
 setup_colors
 
 SVC=${1%.service}
+LOG_MODE=${2:-}
 
 case "$SVC" in
     ''|*/*) usage ;;
@@ -598,6 +626,11 @@ for _d in /etc/service /run/runit/service /service; do
 done
 
 UNIT_PATH=$(resolve_runit_unit_path "$SVC" "$ENABLED_LINK")
+
+if [ "$LOG_MODE" = l ]; then
+    run_as_root
+    page_logs
+fi
 
 INITD_PATH=''
 

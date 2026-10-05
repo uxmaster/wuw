@@ -32,13 +32,16 @@ _wuw()
         fi
         case ${COMP_WORDS[i]} in
             -n) expect_lines=1 ;;
-            -h|--help|--list-services) service_seen=1 ;;
+            -h|--help|--list-services) return ;;
             -*) ;;
-            *) service_seen=1 ;;
+            *) ((service_seen+=1)) ;;
         esac
     done
 
-    (( service_seen )) && return
+    if (( service_seen )); then
+        (( service_seen == 1 )) && COMPREPLY=( $(compgen -W l -- "$cur") )
+        return 0
+    fi
     COMPREPLY=( $(compgen -W "$(_wuw_service_names)" -- "$cur") )
 }
 

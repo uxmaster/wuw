@@ -8,7 +8,7 @@ Rules-Requires-Root: no
 
 Package: wuw
 Architecture: all
-Depends: ${misc:Depends}, sudo
+Depends: ${misc:Depends}, less, sudo
 Suggests: bash-completion, runit, socklog
 Description: compact status view for runit and SysV services
  wuw (what's up with) displays service state, process information, resource

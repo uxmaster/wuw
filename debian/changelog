@@ -1,3 +1,11 @@
+wuw (1.0.7) unstable; urgency=medium
+
+  * Add SERVICE l to browse current and rotated svlogd logs in less,
+    starting at EOF without concatenating the log history.
+  * Complete the log action in Bash, Zsh and Fish, and depend on less.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Mon, 05 Oct 2026 15:00:00 +0200
+
 wuw (1.0.6) unstable; urgency=medium
 
   * Re-execute service status through sudo when invoked without root

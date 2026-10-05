@@ -8,7 +8,8 @@ _wuw()
         '(-n -h --help 1)--list-services[list discoverable services]' \
         '(-n --list-services 1)'{-h,--help}'[display usage]' \
         '(-h --help --list-services 1)-n+[number of recent log lines]:lines:' \
-        '(-h --help --list-services)1:service:->services'
+        '(-h --help --list-services)1:service:->services' \
+        '(-h --help --list-services)2:action:(l)'
 
     if [[ $state == services ]]; then
         services=("${(@f)$(command wuw --list-services 2>/dev/null)}")

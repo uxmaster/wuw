@@ -24,6 +24,16 @@ _wuw
 COMP_WORDS=(wuw sshguard '')
 COMP_CWORD=2
 _wuw
+[[ ${COMPREPLY[*]} == l ]]
+
+COMP_WORDS=(wuw -n 20 sshguard '')
+COMP_CWORD=4
+_wuw
+[[ ${COMPREPLY[*]} == l ]]
+
+COMP_WORDS=(wuw sshguard l '')
+COMP_CWORD=3
+_wuw
 (( ${#COMPREPLY[@]} == 0 ))
 
 COMP_WORDS=(wuw --list-services '')

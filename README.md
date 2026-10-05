@@ -12,7 +12,8 @@ Devuan paths. If no runit service is available, `wuw` falls back to
 
 Complete status inspection requires root privileges. When an existing service
 is requested by another user, `wuw` automatically re-executes its absolute
-path through `sudo`. Service listing and shell completion remain unprivileged
+path through `sudo`. Log browsing uses the same automatic elevation.
+Service listing and shell completion remain unprivileged
 and never invoke `sudo`.
 
 ## Installation
@@ -27,7 +28,7 @@ sudo apt install wuw
 ## Usage
 
 ```text
-wuw [-n lines] SERVICE
+wuw [-n lines] SERVICE [l]
 wuw --list-services
 ```
 
@@ -37,13 +38,28 @@ Examples:
 wuw ssh
 wuw mysql
 wuw -n 30 sshguard
+wuw mysql l
 ```
 
 Service names are completed dynamically in Bash, Zsh, and Fish from available
 runit service directories and executable SysV init scripts. Bash users need
 the suggested `bash-completion` package.
 
-The default is 12 log lines. Set `WUW_COLOR=always` or `WUW_COLOR=never` to
+Append `l` to browse the service log in `less` instead of printing status.
+The viewer starts at the end of the current log. For svlogd logs, completed
+rotations (`@*.s`) are also available, newest first: type `:n` for an older
+file and `:p` for a newer one. Scrolling stays within the selected file.
+Press `Shift+F` to watch new entries, `Ctrl+C` to stop watching, and `q` to
+quit. Following `current` reopens it when the logger rotates it.
+
+Files are opened directly, without concatenating the history or counting
+all its lines. Log browsing requires a readable per-service log; shared
+syslog files are not scanned. Logs are displayed as stored, without timestamp
+conversion. The pager runs in secure mode, disabling shell/editor commands
+and input preprocessors.
+
+The default status excerpt is 12 log lines; `-n` affects only status output.
+Set `WUW_COLOR=always` or `WUW_COLOR=never` to
 override automatic terminal colour detection. The standard `NO_COLOR`
 environment variable is also honoured.
 
@@ -58,10 +74,12 @@ accounting methods.
 The exit status is 0 for an active service, 3 for an inactive or unknown
 service state, 4 when the service cannot be found, and 2 for invalid usage. If
 automatic privilege elevation fails, `wuw` returns `sudo`'s failure status.
+Log browsing returns the pager's exit status, or 1 when no readable
+per-service log or pager is available.
 
-### Passwordless status for `adm`
+### Passwordless inspection for `adm`
 
-An administrator can allow members of `adm` to run only the supported status
+An administrator can allow members of `adm` to run only the supported inspection
 forms of `wuw` as root without a password. This makes automatic elevation
 transparent and is optional; it is not enabled by the package.
 
@@ -75,7 +93,7 @@ sudo visudo -f /etc/sudoers.d/wuw-adm
 Enter these two lines:
 
 ```sudoers
-Cmnd_Alias WUW_STATUS = /usr/bin/wuw ^([A-Za-z0-9_][A-Za-z0-9_.@:+-]*|-n [0-9]+ [A-Za-z0-9_][A-Za-z0-9_.@:+-]*)$
+Cmnd_Alias WUW_STATUS = /usr/bin/wuw ^([A-Za-z0-9_][A-Za-z0-9_.@:+-]*|-n [0-9]+ [A-Za-z0-9_][A-Za-z0-9_.@:+-]*)( l)?$
 %adm ALL=(root) NOPASSWD: NOSETENV: WUW_STATUS
 ```
 
