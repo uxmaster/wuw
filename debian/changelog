@@ -1,3 +1,12 @@
+wuw (1.0.8) unstable; urgency=medium
+
+  * Show runit's requested state and starting, stopping and restarting
+    transitions, blinking only the status dot.
+  * Use grey for expected stopped states, including completed once runs.
+  * Read the main service PID and state age independently of its logger.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Thu, 08 Oct 2026 21:00:00 +0200
+
 wuw (1.0.7) unstable; urgency=medium
 
   * Add SERVICE l to browse current and rotated svlogd logs in less,

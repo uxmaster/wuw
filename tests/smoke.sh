@@ -183,5 +183,6 @@ printf '%s\n' "$help" | grep -q '^usage: wuw '
 [ "$missing_status" -eq 4 ]
 printf '%s\n' "$missing" | grep -q 'enabla-wuw-missing-service - not found'
 bash "$base/tests/bash-completion.sh"
+sh "$base/tests/runit-status.sh"
 
 echo 'wuw smoke test passed.'

@@ -52,12 +52,14 @@ setup_colors() {
         GREEN='\033[1;32m'
         RED='\033[1;31m'
         GREY='\033[1;90m'
+        BLINK='\033[5m'
         RESET='\033[0m'
     else
         BOLD=''
         GREEN=''
         RED=''
         GREY=''
+        BLINK=''
         RESET=''
     fi
 }
@@ -555,6 +557,99 @@ pid_since_tail() {
     fi
 }
 
+set_runit_status() {
+    # Ignore the logger: its PID, age and requested state belong to another service.
+    _svstatus=$(printf '%s\n' "$1" | sed -n '1 { s/;.*//; p; }')
+    PID=''
+    SECS=''
+    ACTIVE_TAIL=''
+    WANTED_STATE=''
+    WANTED_TAIL=''
+    DOT_BLINK=''
+    ACTIVE_COLOR=$RED
+    DOT_COLOR=$RED
+    EXIT_CODE=3
+
+    case "$_svstatus" in
+        run:*|finish:*|down:*)
+            PID=$(printf '%s\n' "$_svstatus" | sed -n \
+                's/^[^(]*(pid \([0-9][0-9]*\)).*/\1/p')
+            SECS=$(printf '%s\n' "$_svstatus" | sed -n \
+                's/^[^:]*: .* \([0-9][0-9]*\)s\(,.*\)\{0,1\}$/\1/p
+                 s/^[^:]*: \([0-9][0-9]*\)s\(,.*\)\{0,1\}$/\1/p')
+            ;;
+        *)
+            ACTIVE_STATE='unknown'
+            ACTIVE_TAIL=" ($1)"
+            return
+            ;;
+    esac
+
+    if [ -z "$SECS" ] || { [ "${_svstatus%%:*}" != down ] && [ -z "$PID" ]; }; then
+        ACTIVE_STATE='unknown'
+        ACTIVE_TAIL=" ($1)"
+        PID=''
+        return
+    fi
+
+    case "$_svstatus" in
+        down:*)
+            ACTIVE_STATE='inactive (stopped)'
+            ACTIVE_COLOR=$GREY
+            DOT_COLOR=$GREY
+            WANTED_STATE=down
+            case "$_svstatus" in
+                *,\ want\ up*)
+                    ACTIVE_STATE='inactive (starting)'
+                    ACTIVE_COLOR=$RED
+                    DOT_COLOR=$RED
+                    DOT_BLINK=$BLINK
+                    WANTED_STATE=up
+                    ;;
+            esac
+            [ -z "$SECS" ] || ACTIVE_TAIL="; down for ${SECS}s"
+            ;;
+        run:*|finish:*)
+            WANTED_STATE=up
+            case "$_svstatus" in *,\ want\ down*) WANTED_STATE=down ;; esac
+            if [ "${_svstatus%%:*}" = finish ]; then
+                ACTIVE_STATE='inactive (starting; finish script)'
+                if [ "$WANTED_STATE" = down ]; then
+                    ACTIVE_STATE='inactive (stopping; finish script)'
+                    ACTIVE_COLOR=$GREY
+                    DOT_COLOR=$GREEN
+                fi
+                DOT_BLINK=$BLINK
+                [ -z "$SECS" ] || ACTIVE_TAIL="; finishing for ${SECS}s"
+            else
+                ACTIVE_STATE='active (running)'
+                ACTIVE_COLOR=$GREEN
+                DOT_COLOR=$GREEN
+                EXIT_CODE=0
+                case "$_svstatus" in
+                    *,\ got\ TERM*)
+                        ACTIVE_STATE='active (restarting)'
+                        [ "$WANTED_STATE" != down ] || ACTIVE_STATE='active (stopping)'
+                        DOT_BLINK=$BLINK
+                        ;;
+                    *)
+                        if [ "$WANTED_STATE" = down ]; then
+                            WANTED_TAIL=' (no restart)'
+                        fi
+                        ;;
+                esac
+                if [ "$ACTIVE_STATE" = 'active (running)' ] && [ -n "$PID" ]; then
+                    ACTIVE_TAIL=$(pid_since_tail "$PID")
+                fi
+                if [ -z "$ACTIVE_TAIL" ] && [ -n "$SECS" ]; then
+                    ACTIVE_TAIL="; running for ${SECS}s"
+                fi
+            fi
+            ;;
+    esac
+    case "$_svstatus" in *,\ paused*) ACTIVE_TAIL="$ACTIVE_TAIL; paused" ;; esac
+}
+
 run_as_root() {
     [ "$(id -u)" -ne 0 ] || return
 
@@ -661,6 +756,9 @@ ACTIVE_STATE='inactive (dead)'
 ACTIVE_TAIL=''
 ACTIVE_COLOR=$GREY
 DOT_COLOR=$GREY
+DOT_BLINK=''
+WANTED_STATE=''
+WANTED_TAIL=''
 EXIT_CODE=3
 ENABLED='disabled'
 ENABLED_COLOR=$GREY
@@ -681,53 +779,7 @@ if [ "$BACKEND" = runit ]; then
     fi
 
     if [ "$ENABLED" = enabled ]; then
-        case "$SVOUT" in
-            run:*)
-                PID=$(printf '%s\n' "$SVOUT" | sed -n \
-                    's/^[^(]*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
-                SECS=$(printf '%s\n' "$SVOUT" | sed -n \
-                    's/^[^(]*(pid [0-9][0-9]*) \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
-
-                ACTIVE_STATE='active (running)'
-                ACTIVE_COLOR=$GREEN
-                DOT_COLOR=$GREEN
-                EXIT_CODE=0
-
-                if [ -n "$PID" ]; then
-                    _tail=$(pid_since_tail "$PID")
-                    if [ -n "$_tail" ]; then
-                        ACTIVE_TAIL=$_tail
-                    elif [ -n "$SECS" ]; then
-                        ACTIVE_TAIL="; $(human_age "$SECS")"
-                    fi
-                elif [ -n "$SECS" ]; then
-                    ACTIVE_TAIL="; $(human_age "$SECS")"
-                fi
-                ;;
-            down:*)
-                SECS=$(printf '%s\n' "$SVOUT" | sed -n 's/.*: \([0-9][0-9]*\)s.*/\1/p' | sed -n '1p')
-                ACTIVE_STATE='inactive (dead)'
-                ACTIVE_COLOR=$RED
-                DOT_COLOR=$RED
-                EXIT_CODE=3
-                [ -n "$SECS" ] && ACTIVE_TAIL="; $(human_age "$SECS")"
-                ;;
-            finish:*)
-                PID=$(printf '%s\n' "$SVOUT" | sed -n 's/.*(pid \([0-9][0-9]*\)).*/\1/p' | sed -n '1p')
-                ACTIVE_STATE='deactivating'
-                ACTIVE_TAIL=' (finish script)'
-                ACTIVE_COLOR=$RED
-                DOT_COLOR=$RED
-                EXIT_CODE=3
-                ;;
-            *)
-                ACTIVE_STATE='unknown'
-                ACTIVE_TAIL=" ($SVOUT)"
-                ACTIVE_COLOR=$RED
-                DOT_COLOR=$RED
-                EXIT_CODE=3
-                ;;
-        esac
+        set_runit_status "$SVOUT"
     fi
 else
     UNIT_PATH=$INITD_PATH
@@ -772,13 +824,17 @@ else
     fi
 fi
 
-printf '%b●%b %b%s%b - %s\n' "$DOT_COLOR" "$RESET" "$BOLD" "$SVC" "$RESET" "$DESC"
+printf '%b%b●%b %b%s%b - %s\n' "$DOT_COLOR" "$DOT_BLINK" "$RESET" "$BOLD" "$SVC" "$RESET" "$DESC"
 
 printf '     Loaded: loaded (%s; ' "$UNIT_PATH"
 printf '%b%s%b' "$ENABLED_COLOR" "$ENABLED" "$RESET"
 printf '%s)\n' "$LOAD_EXTRA"
 
 printf '     Active: %b%s%b%s\n' "$ACTIVE_COLOR" "$ACTIVE_STATE" "$RESET" "$ACTIVE_TAIL"
+
+if [ -n "$WANTED_STATE" ]; then
+    printf '     Wanted: %s%s\n' "$WANTED_STATE" "$WANTED_TAIL"
+fi
 
 if [ -n "$PID" ]; then
     PIDS=$(descendant_pids "$PID")

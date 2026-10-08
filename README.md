@@ -63,6 +63,24 @@ Set `WUW_COLOR=always` or `WUW_COLOR=never` to
 override automatic terminal colour detection. The standard `NO_COLOR`
 environment variable is also honoured.
 
+Runit status separates the current state (`Active`) from the requested state
+(`Wanted`). A red blinking dot means the service is down and wants to start;
+a green blinking dot means it is stopping or restarting. Only the dot blinks,
+and the state is also written in plain text. Terminal support for ANSI blink
+is required to see the animation.
+
+An intentionally stopped service has a steady grey dot, including a completed
+`sv once` run such as `rc.local`. While a one-time run is executing, it stays
+green and reports `Wanted: down (no restart)`.
+Runit status does not record its exit code, so the grey state means it is
+expected to be stopped, rather than confirming successful completion.
+Logger status is kept separate from the service's PID, age and requested state.
+
+During a transition, the displayed seconds describe the current runit state
+(running, down or finishing). Runit does not expose the time of the start/stop
+request; in particular, `running for 120s` is the process age, not the time
+spent waiting for shutdown. A running process is not a readiness check.
+
 Memory is estimated by adding proportional set size (PSS) and page-table
 memory for the main process and all its descendants. This avoids counting
 shared mappings once per process and is the closest useful approximation of
