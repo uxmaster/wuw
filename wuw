@@ -416,15 +416,16 @@ page_logs() {
         */current)
             for _f in "${_log%/*}"/@*.s; do
                 [ -f "$_f" ] && [ -r "$_f" ] || continue
-                set -- "$_f" "$@"
+                set -- "$@" "$_f"
             done
             ;;
     esac
+    set -- "$@" "$_log"
 
-    # Direct files allow seeking to EOF without reading the whole history.
+    # Start at EOF of current, the last file in chronological order.
     # Secure mode prevents shell/editor escapes after automatic sudo elevation.
     unset LINES
-    LESSSECURE=1 LESSSECURE_ALLOW= LESSNOCONFIG= exec less -n --follow-name ++G -- "$_log" "$@"
+    LESSSECURE=1 LESSSECURE_ALLOW= LESSNOCONFIG= exec less -n --follow-name ++G "+$#:x" -- "$@"
 }
 
 print_logs() {

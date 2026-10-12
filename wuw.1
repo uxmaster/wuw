@@ -1,4 +1,4 @@
-.TH WUW 1 "October 2026" "wuw 1.0.8" "User Commands"
+.TH WUW 1 "October 2026" "wuw 1.0.9" "User Commands"
 .SH NAME
 wuw \- show what is happening with a runit or SysV service
 .SH SYNOPSIS
@@ -31,10 +31,10 @@ to browse a per-service log in
 instead of printing status. The same automatic privilege elevation applies.
 The current log opens at its end. Completed svlogd rotations
 .RI ( @*.s )
-are available newest first: type
-.B :n
-for an older file and
+are available in chronological order: type
 .B :p
+for an older file and
+.B :n
 for a newer one. Scrolling stays within the selected file.
 Press
 .B Shift+F

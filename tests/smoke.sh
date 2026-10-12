@@ -71,7 +71,7 @@ WUW_ROOT=$root
 export WUW_ROOT
 [ "$(find_log_file proxy '')" = "$root/var/log/runit/proxy/current" ]
 
-# Only completed rotations belong in the pager, ordered newest first.
+# Only completed rotations belong in the pager, ordered chronologically.
 logdir=$root/var/log/runit/proxy
 older=$logdir/@400000000000000000000001.s
 newer=$logdir/@400000000000000000000002.s
@@ -89,9 +89,9 @@ output=$(
     set -- proxy.service l
     . "$base/wuw"
 )
-[ "$output" = "active runit log
+[ "$output" = "older log
 newer log
-older log" ]
+active runit log" ]
 
 mkdir "$root/bin"
 cat >"$root/bin/less" <<'EOF'
@@ -113,16 +113,18 @@ output=$(LESSSECURE_ALLOW=shell LESSNOCONFIG=- page_logs)
 -n
 --follow-name
 ++G
++3:x
 --
-$logdir/current
+$older
 $newer
-$older" ]
+$logdir/current" ]
 rm "$older" "$newer"
 output=$(page_logs)
 [ "$output" = "secure=1 allow= config=
 -n
 --follow-name
 ++G
++1:x
 --
 $logdir/current" ]
 
@@ -133,6 +135,7 @@ output=$(SVC=web page_logs)
 -n
 --follow-name
 ++G
++1:x
 --
 $root/var/log/web/error.log" ]
 

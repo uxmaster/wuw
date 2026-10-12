@@ -47,8 +47,9 @@ the suggested `bash-completion` package.
 
 Append `l` to browse the service log in `less` instead of printing status.
 The viewer starts at the end of the current log. For svlogd logs, completed
-rotations (`@*.s`) are also available, newest first: type `:n` for an older
-file and `:p` for a newer one. Scrolling stays within the selected file.
+rotations (`@*.s`) are also available in chronological order: type `:p` for
+an older file and `:n` for a newer one. Scrolling stays within the selected
+file.
 Press `Shift+F` to watch new entries, `Ctrl+C` to stop watching, and `q` to
 quit. Following `current` reopens it when the logger rotates it.
 
