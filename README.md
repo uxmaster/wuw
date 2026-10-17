@@ -77,10 +77,20 @@ Runit status does not record its exit code, so the grey state means it is
 expected to be stopped, rather than confirming successful completion.
 Logger status is kept separate from the service's PID, age and requested state.
 
-During a transition, the displayed seconds describe the current runit state
-(running, down or finishing). Runit does not expose the time of the start/stop
-request; in particular, `running for 120s` is the process age, not the time
-spent waiting for shutdown. A running process is not a readiness check.
+Running services show the start time and a readable age (e.g. `13 days ago`)
+calculated from the runtime reported by runit. While stopping or restarting,
+the timestamp is labelled `; running since ...` to distinguish the process
+start from the start of the transition.
+Down and finishing times describe the age of the current runit state.
+Runit does not expose the time of the start/stop request; the displayed runtime
+is not the time spent waiting for shutdown. A running process is not a
+readiness check.
+
+For SysV scripts, `enabled` includes boot tasks registered in `/etc/rcS.d`.
+A successful status command without an identifiable PID is displayed as
+`active (no PID found)`, followed by the script's status message. This can
+mean configuration is active, as with `resolvconf`; it does not establish
+that a daemon is running or that a one-time task completed successfully.
 
 Memory is estimated by adding proportional set size (PSS) and page-table
 memory for the main process and all its descendants. This avoids counting

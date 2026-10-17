@@ -4,7 +4,19 @@ set -eu
 base=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
 WUW_COLOR=always setup_colors
-pid_since_tail() { :; }
+date() {
+    [ "$#" -eq 3 ] && [ "$1" = -d ] && [ "$3" = '+%a %Y-%m-%d %H:%M:%S %Z' ] || return 1
+    # Fix the clock at Sat 2026-10-17 12:34:56 UTC.
+    case "$2" in
+        '0 seconds ago') printf 'Sat 2026-10-17 12:34:56 UTC' ;;
+        '2 seconds ago') printf 'Sat 2026-10-17 12:34:54 UTC' ;;
+        '200 seconds ago') printf 'Sat 2026-10-17 12:31:36 UTC' ;;
+        '86400 seconds ago') printf 'Fri 2026-10-16 12:34:56 UTC' ;;
+        '172800 seconds ago') printf 'Thu 2026-10-15 12:34:56 UTC' ;;
+        '1203211 seconds ago') printf 'Sat 2026-10-03 14:21:25 UTC' ;;
+        *) return 1 ;;
+    esac
+}
 
 check_status() {
     set_runit_status "$1"
@@ -21,7 +33,7 @@ check_status() {
 
 check_status 'run: ssh: (pid 101) 200s; run: log: (pid 999) 900s' \
     'active (running)|up|101|200|0' "$GREEN" ''
-[ "$ACTIVE_TAIL" = '; running for 200s' ]
+[ "$ACTIVE_TAIL" = ' since Sat 2026-10-17 12:31:36 UTC; 3 min ago' ]
 
 check_status 'down: ssh: 8s, normally up, want up; run: log: (pid 999) 900s' \
     'inactive (starting)|up||8|3' "$RED" "$BLINK"
@@ -29,10 +41,27 @@ check_status 'down: ssh: 8s, normally up, want up; run: log: (pid 999) 900s' \
 
 check_status 'run: ssh: (pid 101) 200s, want down, got TERM' \
     'active (stopping)|down|101|200|0' "$GREEN" "$BLINK"
-[ "$ACTIVE_TAIL" = '; running for 200s' ]
+[ "$ACTIVE_TAIL" = '; running since Sat 2026-10-17 12:31:36 UTC; 3 min ago' ]
+
+check_status 'run: ssh: (pid 101) 1203211s, want down, got TERM' \
+    'active (stopping)|down|101|1203211|0' "$GREEN" "$BLINK"
+[ "$ACTIVE_TAIL" = '; running since Sat 2026-10-03 14:21:25 UTC; 13 days ago' ]
 
 check_status 'run: ssh: (pid 101) 200s, got TERM; down: log: 7s, want up' \
     'active (restarting)|up|101|200|0' "$GREEN" "$BLINK"
+[ "$ACTIVE_TAIL" = '; running since Sat 2026-10-17 12:31:36 UTC; 3 min ago' ]
+
+check_status 'run: ssh: (pid 101) 0s' \
+    'active (running)|up|101|0|0' "$GREEN" ''
+[ "$ACTIVE_TAIL" = ' since Sat 2026-10-17 12:34:56 UTC; 0s ago' ]
+
+check_status 'run: ssh: (pid 101) 86400s, want down, got TERM' \
+    'active (stopping)|down|101|86400|0' "$GREEN" "$BLINK"
+[ "$ACTIVE_TAIL" = '; running since Fri 2026-10-16 12:34:56 UTC; 1 day ago' ]
+
+check_status 'run: ssh: (pid 101) 172800s, got TERM' \
+    'active (restarting)|up|101|172800|0' "$GREEN" "$BLINK"
+[ "$ACTIVE_TAIL" = '; running since Thu 2026-10-15 12:34:56 UTC; 2 days ago' ]
 
 check_status 'run: rc.local: (pid 101) 2s, want down' \
     'active (running)|down (no restart)|101|2|0' "$GREEN" ''
@@ -51,7 +80,7 @@ check_status 'run: ssh: (pid 101) 200s, normally down' \
 
 check_status 'run: ssh: (pid 101) 200s, paused' \
     'active (running)|up|101|200|0' "$GREEN" ''
-[ "$ACTIVE_TAIL" = '; running for 200s; paused' ]
+[ "$ACTIVE_TAIL" = ' since Sat 2026-10-17 12:31:36 UTC; 3 min ago; paused' ]
 
 check_status 'finish: ssh: (pid 202) 3s, want down; run: log: (pid 999) 900s' \
     'inactive (stopping; finish script)|down|202|3|3' "$GREEN" "$BLINK"
@@ -68,7 +97,6 @@ check_status 'warning: ssh: unable to open supervise/ok: access denied' \
 check_status 'run: malformed' 'unknown||||3' "$RED" ''
 
 WUW_COLOR=never setup_colors
-pid_since_tail() { printf ' since mocked'; }
 set_runit_status 'down: ssh: 8s, normally up, want up'
 [ "$ACTIVE_STATE" = 'inactive (starting)' ]
 [ -z "$DOT_COLOR$DOT_BLINK$ACTIVE_COLOR" ]
@@ -76,6 +104,6 @@ WUW_COLOR=auto NO_COLOR=1 setup_colors
 set_runit_status 'run: ssh: (pid 101) 200s, want down, got TERM'
 [ "$ACTIVE_STATE" = 'active (stopping)' ]
 [ -z "$DOT_COLOR$DOT_BLINK$ACTIVE_COLOR" ]
-[ "$ACTIVE_TAIL" = '; running for 200s' ]
+[ "$ACTIVE_TAIL" = '; running since Sat 2026-10-17 12:31:36 UTC; 3 min ago' ]
 
 echo 'wuw runit status test passed.'

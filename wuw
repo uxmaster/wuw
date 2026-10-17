@@ -455,8 +455,10 @@ print_logs() {
 
 sysv_enabled_state() {
     _svc=$1
+    _root=${WUW_ROOT:-}
+    _root=${_root%/}
 
-    for _l in /etc/rc2.d/S??"$_svc" /etc/rc3.d/S??"$_svc" /etc/rc4.d/S??"$_svc" /etc/rc5.d/S??"$_svc"; do
+    for _l in "$_root"/etc/rc[S2345].d/S??"$_svc"; do
         [ -e "$_l" ] && {
             printf 'enabled'
             return
@@ -639,11 +641,10 @@ set_runit_status() {
                         fi
                         ;;
                 esac
-                if [ "$ACTIVE_STATE" = 'active (running)' ] && [ -n "$PID" ]; then
-                    ACTIVE_TAIL=$(pid_since_tail "$PID")
-                fi
-                if [ -z "$ACTIVE_TAIL" ] && [ -n "$SECS" ]; then
-                    ACTIVE_TAIL="; running for ${SECS}s"
+                _since=$(date -d "$SECS seconds ago" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null)
+                ACTIVE_TAIL=" since $_since; $(human_age "$SECS")"
+                if [ "$ACTIVE_STATE" != 'active (running)' ]; then
+                    ACTIVE_TAIL="; running$ACTIVE_TAIL"
                 fi
             fi
             ;;
@@ -728,11 +729,9 @@ if [ "$LOG_MODE" = l ]; then
     page_logs
 fi
 
-INITD_PATH=''
-
-if [ -x "/etc/init.d/$SVC" ]; then
-    INITD_PATH="/etc/init.d/$SVC"
-fi
+INITD_PATH=${WUW_ROOT:-}
+INITD_PATH=${INITD_PATH%/}/etc/init.d/$SVC
+[ -x "$INITD_PATH" ] || INITD_PATH=''
 
 BACKEND=''
 
@@ -821,7 +820,12 @@ else
 
     if [ "$EXIT_CODE" -eq 0 ]; then
         PID=$(find_main_pid "$SVC" "$INITOUT")
-        [ -n "$PID" ] && ACTIVE_TAIL=$(pid_since_tail "$PID")
+        if [ -n "$PID" ]; then
+            ACTIVE_TAIL=$(pid_since_tail "$PID")
+        else
+            ACTIVE_STATE='active (no PID found)'
+            [ -z "$INITOUT" ] || ACTIVE_TAIL="; $INITOUT"
+        fi
     fi
 fi
 

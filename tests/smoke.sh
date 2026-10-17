@@ -165,6 +165,39 @@ proxy
 l" ]
 unset WUW_ROOT
 
+# SysV boot tasks can be enabled in rcS.d without running a daemon.
+svc=enabla-wuw-sysv-test
+cat >"$root/etc/init.d/$svc" <<'EOF'
+#!/bin/sh
+[ "$1" = status ] || exit 2
+printf 'configuration is enabled\n'
+EOF
+chmod +x "$root/etc/init.d/$svc"
+mkdir -p "$root/etc/rcS.d" "$root/etc/rc2.d"
+[ "$(WUW_ROOT=$root sysv_enabled_state "$svc")" = disabled ]
+ln -s "../init.d/$svc" "$root/etc/rcS.d/S02$svc"
+[ "$(WUW_ROOT=$root sysv_enabled_state "$svc")" = enabled ]
+sysv_status() (
+    set +e
+    id() { printf '0\n'; }
+    set -- "$svc"
+    . "$base/wuw"
+)
+output=$(WUW_ROOT=$root WUW_COLOR=never sysv_status)
+printf '%s\n' "$output" | grep -Fq 'enabled; SysV init script)'
+printf '%s\n' "$output" | grep -Fq 'Active: active (no PID found); configuration is enabled'
+case "$output" in *'Main PID:'*) exit 1 ;; esac
+
+mv "$root/etc/rcS.d/S02$svc" "$root/etc/rcS.d/K02$svc"
+[ "$(WUW_ROOT=$root sysv_enabled_state "$svc")" = disabled ]
+ln -s "../init.d/$svc" "$root/etc/rc2.d/S02$svc"
+[ "$(WUW_ROOT=$root sysv_enabled_state "$svc")" = enabled ]
+mkdir -p "$root/proc/$$"
+printf '%s\n' "$$" >"$root/run/$svc.pid"
+output=$(WUW_ROOT=$root WUW_PROC_ROOT=$root/proc WUW_COLOR=never sysv_status)
+printf '%s\n' "$output" | grep -Fq 'Active: active (running)'
+printf '%s\n' "$output" | grep -Fq "Main PID: $$ "
+
 for args in 'proxy x' 'proxy l extra' '-n nope proxy l'; do
     if "$base/wuw" $args >"$root/output" 2>&1; then
         echo "invalid arguments must fail: $args" >&2

@@ -1,3 +1,13 @@
+wuw (1.0.10) unstable; urgency=medium
+
+  * Use runit's runtime to show the start time and a readable age consistently
+    while running, stopping or restarting, with an explicit running since
+    label during transitions.
+  * Recognize SysV boot tasks enabled in rcS.d and avoid claiming a process
+    is running when a successful status command yields no identifiable PID.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sat, 17 Oct 2026 13:26:37 +0200
+
 wuw (1.0.9) unstable; urgency=medium
 
   * Browse rotated logs in chronological order so :p opens an older file
