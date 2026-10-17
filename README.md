@@ -7,14 +7,21 @@ requiring systemd.
 It reports the service definition, enabled and active state, main process,
 descendant processes, resource use, and recent logs when they are readable.
 Runit services and their dedicated loggers are discovered under the usual
-Devuan paths. If no runit service is available, `wuw` falls back to
-`/etc/init.d/SERVICE status`.
+[Devuan](https://www.devuan.org/) paths. If no runit service is available,
+`wuw` falls back to `/etc/init.d/SERVICE status`.
 
 Complete status inspection requires root privileges. When an existing service
 is requested by another user, `wuw` automatically re-executes its absolute
 path through `sudo`. Log browsing uses the same automatic elevation.
 Service listing and shell completion remain unprivileged
 and never invoke `sudo`.
+
+## Mirors
+
+Public Git mirrors of my Mercurial repo:
+
+- [wuw on GitLab](https://gitlab.com/uxmaster/wuw)
+- [wuw on GitHub](https://github.com/uxmaster/wuw)
 
 ## Installation
 
@@ -143,9 +150,9 @@ The current login must include `adm`, and `command -v wuw` must report
 test does not match the rule, inspect the effective policy with
 `sudo -ll /usr/bin/wuw mysql`.
 
-## Building the Debian package
+## Building on Devuan
 
-Install the Debian packaging tools and build from the repository root:
+Install the packaging tools and build from the repository root:
 
 ```sh
 sudo apt install build-essential debhelper
@@ -157,5 +164,5 @@ directory.
 
 ## License
 
-Copyright © 2026 Jacek Stypuła. Licensed under the WTFPL, version 2. See
-[`LICENSE`](LICENSE).
+Copyright © 2026 [dr Jacek Stypuła](https://jacekstypula.pl/phd).
+Licensed under the WTFPL, version 2. See [`LICENSE`](LICENSE).
