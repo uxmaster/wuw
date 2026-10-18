@@ -48,6 +48,35 @@ Files are opened directly without concatenating the history or counting
 all lines. Shared syslog files are not scanned in this mode, and timestamps
 are displayed as stored. The pager runs in secure mode with shell/editor
 commands and input preprocessors disabled.
+.SH SERVICE DESCRIPTIONS
+The description after the service name in the status header is read from
+local files in this order:
+.IP 1. 4
+The runit service's run script: # Short-Description:, then # Description:.
+.IP 2. 4
+/etc/init.d/SERVICE: # Short-Description:, then # Description:.
+.IP 3. 4
+Description= in SERVICE.service, checking /lib/systemd/system,
+/usr/lib/systemd/system, then /etc/systemd/system. These files, when present,
+are read as text metadata.
+.IP 4. 4
+The literal text service if no description is found.
+.PP
+For runit, the script is read from the service directory shown in Loaded,
+following the supervised service link. For example, when nginx's Loaded path
+is /usr/share/runit/sv.now/nginx, its run script is
+/usr/share/runit/sv.now/nginx/run.
+.PP
+To give a runit service a description, add a comment near the top of its
+run script:
+.PP
+.nf
+#!/bin/sh
+# Short-Description: SSHGuard Server
+.fi
+.PP
+Use a single-line description. Only the first matching line for each field
+is considered; an empty value advances to the next field or source.
 .SH RUNIT STATE
 The Active line reports the current state and Wanted reports the requested
 state. A red blinking dot means the service is down and wants to start.

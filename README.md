@@ -130,6 +130,36 @@ automatic privilege elevation fails, `wuw` returns `sudo`'s failure status.
 Log browsing returns the pager's exit status, or 1 when no readable
 per-service log or pager is available.
 
+### Service descriptions
+
+The description after the service name in the status header (for example,
+`SSHGuard Server` in `sshguard - SSHGuard Server`) is read from local files
+in this order:
+
+1. The runit service's `run` script: `# Short-Description:`, then
+   `# Description:`.
+2. `/etc/init.d/SERVICE`: `# Short-Description:`, then `# Description:`.
+3. `Description=` in `SERVICE.service`, checking `/lib/systemd/system`,
+   `/usr/lib/systemd/system`, then `/etc/systemd/system`. These files, when
+   present, are read as text metadata.
+4. The literal text `service` if no description is found.
+
+For runit, the script is read from the service directory shown in `Loaded`,
+following the supervised service link. For example, if nginx's `Loaded` path
+is `/usr/share/runit/sv.now/nginx`, its description comes from
+`/usr/share/runit/sv.now/nginx/run` before the other sources are checked.
+
+To give a runit service a description, add a comment near the top of its
+`run` script:
+
+```sh
+#!/bin/sh
+# Short-Description: SSHGuard Server
+```
+
+Use a single-line description. Only the first matching line for each field
+is considered; an empty value advances to the next field or source.
+
 ### Passwordless inspection for `adm`
 
 An administrator can allow members of `adm` to run only the supported inspection
