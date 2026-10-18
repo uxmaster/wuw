@@ -200,6 +200,7 @@ desc_from_files() {
 
 descendant_pids() {
     _root=$1
+    _proc=${WUW_PROC_ROOT:-/proc}
 
     awk -v root="$_root" '
         /^Pid:/  { current_pid=$2 }
@@ -224,14 +225,15 @@ descendant_pids() {
             for (i=1; i<=count; i++)
                 if (alive[pid[i]]) print pid[i]
         }
-    ' /proc/[0-9]*/status 2>/dev/null
+    ' "$_proc"/[0-9]*/status 2>/dev/null
 }
 
 process_name() {
     _pid=$1
+    _proc=${WUW_PROC_ROOT:-/proc}
 
-    if [ -r "/proc/$_pid/comm" ]; then
-        sed -n '1p' "/proc/$_pid/comm"
+    if [ -r "$_proc/$_pid/comm" ]; then
+        sed -n '1p' "$_proc/$_pid/comm"
     elif command -v ps >/dev/null 2>&1; then
         ps -o comm= -p "$_pid" 2>/dev/null | sed 's/^[[:space:]]*//'
     fi
@@ -239,12 +241,23 @@ process_name() {
 
 process_args() {
     _pid=$1
+    _proc=${WUW_PROC_ROOT:-/proc}
 
-    if [ -r "/proc/$_pid/cmdline" ]; then
-        tr '\000' ' ' < "/proc/$_pid/cmdline" | sed 's/[[:space:]]*$//'
+    if [ -r "$_proc/$_pid/cmdline" ]; then
+        tr '\000' ' ' < "$_proc/$_pid/cmdline" | sed 's/[[:space:]]*$//'
     elif command -v ps >/dev/null 2>&1; then
         ps -o args= -p "$_pid" 2>/dev/null | sed 's/^[[:space:]]*//'
     fi
+}
+
+process_pgid() {
+    _stat=$(cat "${WUW_PROC_ROOT:-/proc}/$1/stat" 2>/dev/null) || return 1
+    # comm can contain spaces and parentheses; fields follow its last ')'.
+    _rest=${_stat##*) }
+    [ "$_rest" != "$_stat" ] || return 1
+    set -- $_rest
+    case "${3:-}" in ''|*[!0-9]*) return 1 ;; esac
+    printf '%s' "$3"
 }
 
 sum_threads() {
@@ -332,23 +345,68 @@ sum_cpu_sec() {
 }
 
 print_process_tree() {
-    set -- $PIDS
-    _n=$#
-    _i=0
+    [ -n "$PIDS" ] || return 0
 
-    for _p do
-        _i=$((_i + 1))
+    _parent=$(sed -n 's/^PPid:[[:space:]]*//p' \
+        "${WUW_PROC_ROOT:-/proc}/$PID/status" 2>/dev/null) || _parent=
+    _inherited=$(process_pgid "$_parent") || {
+        _inherited=$(process_pgid "$PID") || _inherited=
+    }
 
-        if [ "$_i" -eq "$_n" ]; then
-            _branch='└─'
+    _groups=$(
+        for _p in $PIDS; do
+            _pgid=$(process_pgid "$_p") || _pgid=direct
+            [ "$_pgid" != "$_inherited" ] || _pgid=direct
+            printf '%s %s\n' "$_pgid" "$_p"
+        done | awk '
+            !($1 in members) { order[++count]=$1 }
+            { members[$1]=members[$1] " " $2 }
+            END {
+                for (i=1; i<=count; i++)
+                    print (i==count), order[i], members[order[i]]
+            }
+        '
+    )
+
+    printf '%s\n' "$_groups" | while read -r _last _pgid _members; do
+        set -- $_members
+        _n=$#
+        if [ "$_pgid" = direct ]; then
+            _indent=
+            _last_member=$_last
         else
-            _branch='├─'
+            if [ "$_last" -eq 1 ]; then
+                _branch='└─'
+                _indent='  '
+            else
+                _branch='├─'
+                _indent='│ '
+            fi
+            _label=$(process_args "$_pgid")
+            [ -n "$_label" ] || _label=$(process_args "$1")
+            [ -n "$_label" ] || _label=$(process_name "$1")
+            [ -n "$_label" ] || _label=${SVC:-service}
+            printf '             %s%s %s\n' "$_branch" "$_pgid" "$_label"
+            case " $_members " in
+                *" $_pgid "*) _n=$((_n - 1)) ;;
+            esac
+            _last_member=1
         fi
 
-        _args=$(process_args "$_p" | sed 's/"/\\"/g')
-        [ -n "$_args" ] || _args="[$_p]"
+        _i=0
+        for _p do
+            [ "$_p" != "$_pgid" ] || continue
+            _i=$((_i + 1))
+            if [ "$_i" -eq "$_n" ] && [ "$_last_member" -eq 1 ]; then
+                _branch='└─'
+            else
+                _branch='├─'
+            fi
 
-        printf '             %s%s "%s"\n' "$_branch" "$_p" "$_args"
+            _args=$(process_args "$_p")
+            [ -n "$_args" ] || _args="[$_p]"
+            printf '             %s%s%s %s\n' "$_indent" "$_branch" "$_p" "$_args"
+        done
     done
 }
 
@@ -855,7 +913,7 @@ if [ -n "$PID" ]; then
     printf '      Tasks: %s\n' "$TASKS"
     printf '     Memory: %s (%s)\n' "$(format_kb "$MEMORY_KB")" "$MEMORY_KIND"
     printf '        CPU: %s\n' "$(human_cpu "$CPU_SEC")"
-    printf '     Group: /%s/%s\n' "$BACKEND" "$SVC"
+    printf '      Group: /%s/%s\n' "$BACKEND" "$SVC"
 
     print_process_tree
 fi

@@ -99,6 +99,23 @@ A successful status command without an identifiable PID is displayed as
 mean configuration is active, as with `resolvconf`; it does not establish
 that a daemon is running or that a one-time task completed successfully.
 
+The `Group` path identifies the service and its supervisor backend, for example
+`/runit/sshguard` or `/sysv/mysql`. Processes that share the main process's
+parent's process group are listed directly beneath it. Separate process groups
+appear as labelled branches, for example `1766 /bin/sh /usr/sbin/sshguard`,
+with their remaining service processes beneath them. The branch represents
+the group leader once; it is not repeated among the members. The leading
+number is the actual process group ID (PGID), read from `/proc/PID/stat`;
+the label is the group leader's full command line, including
+the script path when run through an interpreter. If the leader has exited,
+a surviving member's command line is used, falling back to its process name
+or the service name if unavailable. These labels describe process groups,
+not cgroups.
+Only the main process and its descendants are listed, excluding its runit
+supervisor and dedicated logger. A process with an unreadable PGID is listed
+directly under the service. If the parent's PGID cannot be read, the main
+process's group is used as the default instead.
+
 Memory is estimated by adding proportional set size (PSS) and page-table
 memory for the main process and all its descendants. This avoids counting
 shared mappings once per process and is the closest useful approximation of

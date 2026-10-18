@@ -197,6 +197,8 @@ printf '%s\n' "$$" >"$root/run/$svc.pid"
 output=$(WUW_ROOT=$root WUW_PROC_ROOT=$root/proc WUW_COLOR=never sysv_status)
 printf '%s\n' "$output" | grep -Fq 'Active: active (running)'
 printf '%s\n' "$output" | grep -Fq "Main PID: $$ "
+printf '%s\n' "$output" | grep -Fq "Group: /sysv/$svc"
+case "$output" in *PGID*) exit 1 ;; esac
 
 for args in 'proxy x' 'proxy l extra' '-n nope proxy l'; do
     if "$base/wuw" $args >"$root/output" 2>&1; then
@@ -220,5 +222,6 @@ printf '%s\n' "$help" | grep -q '^usage: wuw '
 printf '%s\n' "$missing" | grep -q 'enabla-wuw-missing-service - not found'
 bash "$base/tests/bash-completion.sh"
 sh "$base/tests/runit-status.sh"
+sh "$base/tests/process-groups.sh"
 
 echo 'wuw smoke test passed.'

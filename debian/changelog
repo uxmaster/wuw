@@ -1,3 +1,13 @@
+wuw (1.0.11) unstable; urgency=medium
+
+  * Show separate process groups by their leader's full command line and
+    group number beneath the logical runit or SysV service group, preserving
+    the flat view for processes that share their supervisor's group and
+    displaying each group leader only once.
+  * Print process command lines without added quotes or quote escaping.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sat, 17 Oct 2026 20:18:00 +0200
+
 wuw (1.0.10) unstable; urgency=medium
 
   * Use runit's runtime to show the start time and a readable age consistently
