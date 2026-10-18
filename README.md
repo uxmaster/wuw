@@ -4,6 +4,8 @@
 for a service managed by runit or a traditional SysV init script, without
 requiring systemd.
 
+![WUW showing the status of the SSHGuard runit service](wuw.png)
+
 It reports the service definition, enabled and active state, main process,
 descendant processes, resource use, and recent logs when they are readable.
 Runit services and their dedicated loggers are discovered under the usual
