@@ -12,6 +12,11 @@ Runit services and their dedicated loggers are discovered under the usual
 [Devuan](https://www.devuan.org/) paths. If no runit service is available,
 `wuw` falls back to `/etc/init.d/SERVICE status`.
 
+On a host booted with systemd, `wuw SERVICE` runs `systemctl status` and
+`wuw SERVICE l` opens the last 10000 lines of its journal with `journalctl -e`
+(`-n` sets another count), unless the service is enabled in runit (for example
+with `runit-systemd`). Shell completion also offers systemd service names.
+
 Complete status inspection requires root privileges. When an existing service
 is requested by another user, `wuw` automatically re-executes its absolute
 path through `sudo`. Log browsing uses the same automatic elevation.
@@ -68,7 +73,8 @@ syslog files are not scanned. Logs are displayed as stored, without timestamp
 conversion. The pager runs in secure mode, disabling shell/editor commands
 and input preprocessors.
 
-The default status excerpt is 12 log lines; `-n` affects only status output.
+`-n` sets the status excerpt (default 12); on systemd it also sets the journal
+lines for `l` (default 10000).
 Set `WUW_COLOR=always` or `WUW_COLOR=never` to
 override automatic terminal colour detection. The standard `NO_COLOR`
 environment variable is also honoured.

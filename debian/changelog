@@ -1,3 +1,12 @@
+wuw (1.0.12) unstable; urgency=medium
+
+  * On systemd hosts, show status with systemctl status, browse the last
+    10000 lines of the service journal with journalctl (-n sets another
+    count) and complete systemd service names. Services enabled in runit
+    keep the runit status and log view.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sun, 15 Nov 2026 10:40:00 +0100
+
 wuw (1.0.11) unstable; urgency=medium
 
   * Show separate process groups by their leader's full command line and

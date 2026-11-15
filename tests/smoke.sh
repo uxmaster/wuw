@@ -20,6 +20,26 @@ sshguard" ]
 
 WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
 
+# On systemd, unit files join the list; templates are skipped.
+mkdir -p "$root/systemd-bin" "$root/run/systemd/system"
+cat >"$root/systemd-bin/systemctl" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'ssh.service enabled enabled' 'getty@.service enabled enabled' 'mysql.service enabled enabled'
+EOF
+chmod +x "$root/systemd-bin/systemctl"
+services=$(PATH=$root/systemd-bin:$PATH WUW_ROOT=$root list_services)
+[ "$services" = "garbd
+mysql
+ssh
+sshguard" ]
+# Only a service enabled in runit with sv available stays with runit.
+use() { PATH=$root/systemd-bin:$PATH WUW_ROOT=$root SV_BIN=$1 ENABLED_LINK=$2 use_systemd; }
+use '' "$root/etc/service/sshguard"
+use /usr/bin/sv ''
+! use /usr/bin/sv "$root/etc/service/sshguard" || exit 1
+rm -r "$root/run/systemd"
+! use '' '' || exit 1
+
 printf '1607\n' >"$root/plain.pid"
 printf '  1608 extra fields\n' >"$root/decorated.pid"
 [ "$(read_pidfile "$root/plain.pid")" = 1607 ]

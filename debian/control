@@ -10,7 +10,8 @@ Package: wuw
 Architecture: all
 Depends: ${misc:Depends}, less, sudo
 Suggests: bash-completion, runit, socklog
-Description: compact status view for runit and SysV services
+Description: compact status view for runit, SysV and systemd services
  wuw (what's up with) displays service state, process information, resource
  use and recent logs in a compact systemd-style view. It supports native
  runit services and traditional SysV init scripts without requiring systemd.
+ On systemd hosts it shows systemctl status and the service journal.

@@ -1,4 +1,4 @@
-.TH WUW 1 "October 2026" "wuw 1.0.11" "User Commands"
+.TH WUW 1 "November 2026" "wuw 1.0.12" "User Commands"
 .SH NAME
 wuw \- show what is happening with a runit or SysV service
 .SH SYNOPSIS
@@ -14,6 +14,17 @@ prints a compact service status containing its enabled and active state,
 process tree, resource use, and recent readable log messages.
 It uses runit when a service directory is present and otherwise falls back to
 the service's SysV init script.
+On a host booted with systemd, it runs
+.B systemctl status
+instead, and
+.B l
+opens the last 10000 lines of the service journal with
+.B journalctl \-e
+.RB ( \-n
+sets another count),
+unless the service is enabled in runit;
+.B \-\-list-services
+then also lists systemd services.
 .PP
 Service status requires root privileges. When a requested service exists and
 .B wuw
@@ -136,12 +147,15 @@ accordingly. Neither method includes all memory tracked by a dedicated cgroup.
 .TP
 .BI \-n " lines"
 Show at most this many recent log lines in status output. The default is 12.
+On systemd it also sets the number of journal lines for
+.BR l ;
+the default there is 10000.
 .TP
 .BR \-h , " " \-\-help
 Display a usage summary.
 .TP
 .B \-\-list-services
-List discoverable runit and SysV service names, one per line. This interface is
+List discoverable runit, SysV and systemd service names, one per line. This interface is
 used by the packaged shell completions.
 .SH ENVIRONMENT
 .TP

@@ -2,7 +2,10 @@
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DEFAULT_LINES=12
-LINES=$DEFAULT_LINES
+# Bounded because less must read a journal pipe to its end before showing it.
+DEFAULT_JOURNAL_LINES=10000
+# Empty until -n is given, so an explicit -n 12 still overrides the journal default.
+LINES=
 LOG_MODE=
 
 usage() {
@@ -11,9 +14,25 @@ usage() {
     exit 2
 }
 
+# Booted with systemd, the same check as sd_booted(3).
+systemd_active() {
+    [ -d "${WUW_ROOT:-}/run/systemd/system" ] && command -v systemctl >/dev/null 2>&1
+}
+
+# Services enabled in runit (e.g. with runit-systemd) keep the runit view.
+use_systemd() {
+    systemd_active && { [ -z "$SV_BIN" ] || [ -z "$ENABLED_LINK" ]; }
+}
+
 list_services() {
     _root=${WUW_ROOT:-}
     _root=${_root%/}
+
+    {
+    if systemd_active; then
+        systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null |
+            sed -n 's/^\([^@ ]*\)\.service .*/\1/p'
+    fi
 
     for _d in \
         "$_root/etc/service" \
@@ -32,7 +51,8 @@ list_services() {
             fi
             printf '%s\n' "${_path##*/}"
         done
-    done | LC_ALL=C sort -u
+    done
+    } | LC_ALL=C sort -u
 }
 
 setup_colors() {
@@ -733,7 +753,7 @@ run_as_root() {
 
     set -- "$SVC"
     [ "$LOG_MODE" != l ] || set -- "$@" l
-    [ "$LINES" -eq "$DEFAULT_LINES" ] || set -- -n "$LINES" "$@"
+    [ -z "$LINES" ] || set -- -n "$LINES" "$@"
     exec sudo -- "$_self" "$@"
 }
 
@@ -780,6 +800,20 @@ for _d in /etc/service /run/runit/service /service; do
     fi
 done
 
+if use_systemd; then
+    # Report unknown units without asking for a sudo password.
+    [ "$(systemctl show -p LoadState --value -- "$SVC.service")" = loaded ] ||
+        exec systemctl status --no-pager -- "$SVC.service"
+    run_as_root
+    _n=$LINES
+    # systemd tools size output from LINES.
+    unset LINES
+    # The pager runs as root; systemd < 247 ignores SYSTEMD_PAGERSECURE, less honours LESSSECURE.
+    export SYSTEMD_PAGER=less SYSTEMD_PAGERSECURE=1 LESSSECURE=1
+    [ "$LOG_MODE" != l ] || exec journalctl -e -n "${_n:-$DEFAULT_JOURNAL_LINES}" -u "$SVC.service"
+    exec systemctl status -n "${_n:-$DEFAULT_LINES}" -- "$SVC.service"
+fi
+
 UNIT_PATH=$(resolve_runit_unit_path "$SVC" "$ENABLED_LINK")
 
 if [ "$LOG_MODE" = l ]; then
@@ -805,6 +839,7 @@ else
 fi
 
 run_as_root
+LINES=${LINES:-$DEFAULT_LINES}
 
 DESC=$(desc_from_files "$SVC" "$UNIT_PATH")
 
