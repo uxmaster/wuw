@@ -1,3 +1,9 @@
+wuw (1.0.13) unstable; urgency=medium
+
+  * Complete systemd service names faster.
+
+ -- Enabla Package Maintainers <packages@enabla.pl>  Sun, 15 Nov 2026 15:44:39 +0100
+
 wuw (1.0.12) unstable; urgency=medium
 
   * On systemd hosts, show status with systemctl status, browse the last

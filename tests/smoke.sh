@@ -20,17 +20,21 @@ sshguard" ]
 
 WUW_TEST_SOURCE_ONLY=1 . "$base/wuw"
 
-# On systemd, unit files join the list; templates are skipped.
-mkdir -p "$root/systemd-bin" "$root/run/systemd/system"
-cat >"$root/systemd-bin/systemctl" <<'EOF'
-#!/bin/sh
-printf '%s\n' 'ssh.service enabled enabled' 'getty@.service enabled enabled' 'mysql.service enabled enabled'
-EOF
+# On systemd, unit files join the list; templates and dangling aliases are skipped.
+mkdir -p "$root/systemd-bin" "$root/run/systemd/system" \
+    "$root/usr/lib/systemd/system" "$root/etc/systemd/system"
+printf '#!/bin/sh\n' >"$root/systemd-bin/systemctl"
 chmod +x "$root/systemd-bin/systemctl"
+touch "$root/usr/lib/systemd/system/ssh.service" \
+    "$root/usr/lib/systemd/system/getty@.service" \
+    "$root/usr/lib/systemd/system/mysql.service"
+ln -s ../../../usr/lib/systemd/system/ssh.service "$root/etc/systemd/system/sshd.service"
+ln -s /nonexistent "$root/etc/systemd/system/gone.service"
 services=$(PATH=$root/systemd-bin:$PATH WUW_ROOT=$root list_services)
 [ "$services" = "garbd
 mysql
 ssh
+sshd
 sshguard" ]
 # Only a service enabled in runit with sv available stays with runit.
 use() { PATH=$root/systemd-bin:$PATH WUW_ROOT=$root SV_BIN=$1 ENABLED_LINK=$2 use_systemd; }

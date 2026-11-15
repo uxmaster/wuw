@@ -29,9 +29,19 @@ list_services() {
     _root=${_root%/}
 
     {
+    # Unit directories directly: systemctl list-unit-files takes seconds on small boards.
     if systemd_active; then
-        systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null |
-            sed -n 's/^\([^@ ]*\)\.service .*/\1/p'
+        for _path in "$_root/etc/systemd/system"/*.service \
+            "$_root/run/systemd/system"/*.service \
+            "$_root/usr/local/lib/systemd/system"/*.service \
+            "$_root/usr/lib/systemd/system"/*.service \
+            "$_root/lib/systemd/system"/*.service
+        do
+            [ -e "$_path" ] || continue
+            _path=${_path##*/}
+            case "$_path" in *@.service) continue ;; esac
+            printf '%s\n' "${_path%.service}"
+        done
     fi
 
     for _d in \
